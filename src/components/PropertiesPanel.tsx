@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Copy, Eye, EyeOff, Files, Trash2 } from "lucide-react";
+import { Copy, Eye, EyeOff, Files, Lock, Trash2 } from "lucide-react";
 import { deviceTypeLabels, statusLabels, useStore } from "@/data/store";
 import type { CableType, Device, DeviceConnection, DeviceStatus, DeviceType, MapElement } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,13 @@ const cableLabels: Record<CableType, string> = {
   coaxial: "Coaxial",
   power: "Power",
 };
+const cableDefaultColors: Record<CableType, string> = {
+  utp: "#334155",
+  ftp: "#1d4ed8",
+  coaxial: "#6b21a8",
+  power: "#b45309",
+};
+const quickColors = ["#2563eb", "#16a34a", "#d97706", "#dc2626", "#64748b", "#8b5cf6"];
 
 export function PropertiesPanel() {
   const {
@@ -159,7 +166,10 @@ function DevicePanel({
   return (
     <aside className="w-80 border-l bg-card overflow-y-auto">
       <div className="p-3 border-b sticky top-0 bg-card flex items-center justify-between z-10">
-        <div className="font-semibold text-sm truncate">{device.name || "Устройство"}</div>
+        <div className="font-semibold text-sm truncate flex items-center gap-2">
+          <span>Выбран: {device.name || "Устройство"}</span>
+          {device.locked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
+        </div>
         {canEdit && (
           <div className="flex gap-1">
             <Button
@@ -240,6 +250,18 @@ function DevicePanel({
               ))}
             </SelectContent>
           </Select>
+        </Field>
+
+        <Field label="Заморозить">
+          <label className="flex items-center gap-2 rounded border bg-background px-2 h-8 text-xs">
+            <input
+              type="checkbox"
+              checked={Boolean(device.locked)}
+              onChange={(e) => onUpdate({ locked: e.target.checked })}
+              disabled={!canEdit}
+            />
+            <span>{device.locked ? "Locked" : "Unlocked"}</span>
+          </label>
         </Field>
 
         <Field label="IP-адрес">
@@ -642,7 +664,10 @@ function ConnectionPanel({
   return (
     <aside className="w-80 border-l bg-card overflow-y-auto">
       <div className="p-3 border-b flex items-center justify-between">
-        <div className="font-semibold text-sm">Кабель</div>
+        <div className="font-semibold text-sm flex items-center gap-2">
+          <span>Выбран: Кабель</span>
+          {connection.locked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
+        </div>
         {canEdit && (
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onDelete}>
             <Trash2 className="h-4 w-4 text-destructive" />
@@ -680,6 +705,14 @@ function ConnectionPanel({
           </Select>
         </Field>
 
+        <Field label="Цвет">
+          <ColorControl
+            value={connection.color ?? cableDefaultColors[connection.type]}
+            onChange={(color) => onUpdate({ color })}
+            disabled={!canEdit}
+          />
+        </Field>
+
         <Field label="От устройства">
           <Input value={fromName} className="h-8" disabled readOnly />
         </Field>
@@ -704,6 +737,18 @@ function ConnectionPanel({
             rows={3}
             disabled={!canEdit}
           />
+        </Field>
+
+        <Field label="Заморозить">
+          <label className="flex items-center gap-2 rounded border bg-background px-2 h-8 text-xs">
+            <input
+              type="checkbox"
+              checked={Boolean(connection.locked)}
+              onChange={(e) => onUpdate({ locked: e.target.checked })}
+              disabled={!canEdit}
+            />
+            <span>{connection.locked ? "Locked" : "Unlocked"}</span>
+          </label>
         </Field>
 
         <Field label="Точек маршрута">
@@ -734,7 +779,12 @@ function ElementPanel({
   return (
     <aside className="w-80 border-l bg-card overflow-y-auto">
       <div className="p-3 border-b flex items-center justify-between">
-        <div className="font-semibold text-sm">Элемент: {el.type}</div>
+        <div className="font-semibold text-sm flex items-center gap-2">
+          <span>
+            Выбран: Элемент — {el.type === "room" ? "Помещение" : el.type === "wall" ? "Стена" : el.type === "door" ? "Дверь" : "Текст"}
+          </span>
+          {el.locked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
+        </div>
         {canEdit && (
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onDelete}>
             <Trash2 className="h-4 w-4 text-destructive" />
@@ -762,39 +812,44 @@ function ElementPanel({
             />
           </Field>
         )}
-        {el.type !== "text" && (
-          <>
-            <Field label="Цвет">
-              <input
-                type="color"
-                value={el.color ?? "#dbeafe"}
-                onChange={(e) => onUpdate({ color: e.target.value })}
-                className="h-8 w-full rounded border"
-                disabled={!canEdit}
-              />
-            </Field>
-            <div className="grid grid-cols-2 gap-2">
-              <Field label="Ширина">
-                <Input
-                  type="number"
-                  value={Math.round(el.width)}
-                  onChange={(e) => onUpdate({ width: +e.target.value })}
-                  className="h-8"
-                  disabled={!canEdit}
-                />
-              </Field>
-              <Field label="Высота">
-                <Input
-                  type="number"
-                  value={Math.round(el.height)}
-                  onChange={(e) => onUpdate({ height: +e.target.value })}
-                  className="h-8"
-                  disabled={!canEdit}
-                />
-              </Field>
-            </div>
-          </>
-        )}
+        <Field label={el.type === "text" ? "Цвет текста" : "Цвет"}>
+          <ColorControl
+            value={el.color ?? (el.type === "text" ? "#111827" : "#64748b")}
+            onChange={(color) => onUpdate({ color })}
+            disabled={!canEdit}
+          />
+        </Field>
+        <Field label="Заморозить">
+          <label className="flex items-center gap-2 rounded border bg-background px-2 h-8 text-xs">
+            <input
+              type="checkbox"
+              checked={Boolean(el.locked)}
+              onChange={(e) => onUpdate({ locked: e.target.checked })}
+              disabled={!canEdit}
+            />
+            <span>{el.locked ? "Locked" : "Unlocked"}</span>
+          </label>
+        </Field>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Ширина">
+            <Input
+              type="number"
+              value={Math.round(el.width)}
+              onChange={(e) => onUpdate({ width: +e.target.value })}
+              className="h-8"
+              disabled={!canEdit}
+            />
+          </Field>
+          <Field label="Высота">
+            <Input
+              type="number"
+              value={Math.round(el.height)}
+              onChange={(e) => onUpdate({ height: +e.target.value })}
+              className="h-8"
+              disabled={!canEdit}
+            />
+          </Field>
+        </div>
         <div className="grid grid-cols-2 gap-2">
           <Field label="X">
             <Input
@@ -817,6 +872,41 @@ function ElementPanel({
         </div>
       </div>
     </aside>
+  );
+}
+
+function ColorControl({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (color: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      <input
+        type="color"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-8 w-full rounded border bg-background"
+        disabled={disabled}
+      />
+      <div className="flex flex-wrap gap-1">
+        {quickColors.map((color) => (
+          <button
+            key={color}
+            type="button"
+            className="h-5 w-5 rounded-full border"
+            style={{ backgroundColor: color }}
+            onClick={() => onChange(color)}
+            disabled={disabled}
+            aria-label={`Set color ${color}`}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 

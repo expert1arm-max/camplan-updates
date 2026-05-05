@@ -36,6 +36,9 @@ const cableStyles: Record<CableType, { stroke: string; dash?: string; width: num
   power: { stroke: "#b45309", dash: "2 2", width: 3 },
 };
 
+const DEFAULT_ELEMENT_COLOR = "#64748b";
+const DEFAULT_TEXT_COLOR = "#111827";
+
 type DraftCable = {
   type: CableType;
   start: { deviceId?: string; anchor: CableAnchor; x: number; y: number };
@@ -152,6 +155,38 @@ function projectPointOnSegment(
   return { x, y, distance: Math.hypot(point.x - x, point.y - y) };
 }
 
+function isLockedObject(locked?: boolean) {
+  return Boolean(locked);
+}
+
+function getDirectionConstrainedPoint(from: { x: number; y: number }, raw: { x: number; y: number }) {
+  const snapped = { x: snapGrid(raw.x), y: snapGrid(raw.y) };
+  const dx = snapped.x - from.x;
+  const dy = snapped.y - from.y;
+  const absX = Math.abs(dx);
+  const absY = Math.abs(dy);
+
+  if (absX === 0 && absY === 0) return { x: from.x, y: from.y };
+  if (absX >= absY * 2) return { x: snapped.x, y: from.y };
+  if (absY >= absX * 2) return { x: from.x, y: snapped.y };
+
+  const step = Math.max(absX, absY);
+  const signX = dx >= 0 ? 1 : -1;
+  const signY = dy >= 0 ? 1 : -1;
+  return {
+    x: snapGrid(from.x + signX * step),
+    y: snapGrid(from.y + signY * step),
+  };
+}
+
+function getConnectionStroke(connection: DeviceConnection) {
+  return connection.color ?? cableStyles[connection.type].stroke;
+}
+
+function getElementStroke(element: MapElement) {
+  return element.color ?? DEFAULT_ELEMENT_COLOR;
+}
+
 export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
   const {
     activeFloorId,
@@ -192,6 +227,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
     | { kind: "move-pt"; id: string; index: number }
     | { kind: "move-cable-endpoint"; id: string; endpoint: "from" | "to" }
     | { kind: "resize-el"; id: string; sx: number; sy: number; ow: number; oh: number }
+    | { kind: "draw-wall"; sx: number; sy: number; id: string }
     | { kind: "rotate-dev"; id: string; cx: number; cy: number }
     | { kind: "draw-room"; sx: number; sy: number; id: string }
     | null
@@ -337,10 +373,34 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
     };
   };
 
-  const snapCableRoutePoint = (point: { x: number; y: number }) => ({
-    x: snapGrid(point.x),
-    y: snapGrid(point.y),
-  });
+  const getDraftReferencePoint = (draft: DraftCable) =>
+    draft.points.at(-1) ?? draft.start;
+
+  const getDraftPreviewPoint = (draft: DraftCable, point: { x: number; y: number }) => {
+    const resolved = resolveCableEndpoint(point);
+    if (resolved.deviceId) {
+      return {
+        x: resolved.x,
+        y: resolved.y,
+        deviceId: resolved.deviceId,
+        anchor: resolved.anchor ?? "center",
+      };
+    }
+
+    const base = getDraftReferencePoint(draft);
+    const constrained = getDirectionConstrainedPoint(base, point);
+    return {
+      x: constrained.x,
+      y: constrained.y,
+      deviceId: undefined,
+      anchor: "center" as CableAnchor,
+    };
+  };
+
+  const getDraftRoutePoint = (draft: DraftCable, point: { x: number; y: number }) => {
+    const base = getDraftReferencePoint(draft);
+    return getDirectionConstrainedPoint(base, point);
+  };
 
   const startDraftCable = (point: { x: number; y: number }) => {
     const resolved = resolveCableEndpoint(point);
@@ -393,20 +453,21 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
       current
         ? {
             ...current,
-            points: [...current.points, snapCableRoutePoint(point)],
-            cursor: point,
+            points: [...current.points, getDraftRoutePoint(current, point)],
+            cursor: getDraftPreviewPoint(current, point),
           }
         : current,
     );
   };
 
   const insertConnectionPoint = (connectionId: string, segmentIndex: number, point: { x: number; y: number }) => {
-    const snapped = snapCableRoutePoint(point);
     const connection = floorConnections.find((item) => item.id === connectionId);
     if (!connection) return;
-    const points = [...connection.points];
-    points.splice(segmentIndex, 0, snapped);
-    updateDeviceConnection(connectionId, { points });
+    const pathPoints = getConnectionPathPoints(connection);
+    const constrained = getDirectionConstrainedPoint(pathPoints[segmentIndex], point);
+    const nextPoints = [...connection.points];
+    nextPoints.splice(segmentIndex, 0, constrained);
+    updateDeviceConnection(connectionId, { points: nextPoints });
     setSelectedCableHandle({ connectionId, kind: "point", index: segmentIndex });
     select(connectionId, "connection");
   };
@@ -477,7 +538,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
       }
 
       if (e.detail >= 2) {
-        finalizeDraftCable(resolved);
+        finalizeDraftCable(getDraftPreviewPoint(draftCable, pt));
         return;
       }
 
@@ -513,17 +574,19 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
     }
 
     if (mode === "wall") {
-      addElement({
+      const id = addElement({
         floorId: activeFloorId,
         type: "wall",
-        x: pt.x - 60,
-        y: pt.y - 2,
-        width: 120,
-        height: 4,
+        x: pt.x,
+        y: pt.y,
+        width: 0,
+        height: 0,
         color: "#1f2937",
         rotation: 0,
+        locked: false,
       });
-      setMode("select");
+      select(id, "element");
+      setDrag({ kind: "draw-wall", sx: pt.x, sy: pt.y, id });
       return;
     }
 
@@ -553,6 +616,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
           width: 100,
           height: 20,
           label,
+          color: "#111827",
           rotation: 0,
         });
       }
@@ -578,13 +642,12 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
   const onMouseMove = (e: MouseEvent<SVGSVGElement>) => {
     const pt = toSvg(e.clientX, e.clientY);
     if (draftCable) {
-      const resolved = resolveCableEndpoint(pt);
       setDraftCable((current) =>
         current
           ? {
               ...current,
-              cursor: { x: resolved.x, y: resolved.y },
-              hoverDeviceId: resolved.deviceId,
+              cursor: getDraftPreviewPoint(current, pt),
+              hoverDeviceId: resolveCableEndpoint(pt).deviceId,
             }
           : current,
       );
@@ -606,6 +669,17 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
         y: Math.min(drag.sy, pt.y),
         width: Math.abs(pt.x - drag.sx),
         height: Math.abs(pt.y - drag.sy),
+      });
+      return;
+    }
+
+    if (drag.kind === "draw-wall") {
+      const constrained = getDirectionConstrainedPoint({ x: drag.sx, y: drag.sy }, pt);
+      updateElement(drag.id, {
+        x: drag.sx,
+        y: drag.sy,
+        width: constrained.x - drag.sx,
+        height: constrained.y - drag.sy,
       });
       return;
     }
@@ -648,7 +722,12 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
     }
   };
 
-  const onMouseUp = () => setDrag(null);
+  const onMouseUp = () => {
+    if (drag?.kind === "draw-wall") {
+      setMode("select");
+    }
+    setDrag(null);
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -741,12 +820,14 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
 
   const handleElClick = (e: MouseEvent<SVGGElement>, element: MapElement) => {
     e.stopPropagation();
+    if (isLockedObject(element.locked) && !e.altKey) return;
     if (mode === "delete") {
       removeElement(element.id);
       return;
     }
     select(element.id, "element");
     if (isEditMode && mode === "select") {
+      if (isLockedObject(element.locked)) return;
       const pt = toSvg(e.clientX, e.clientY);
       setDrag({ kind: "move-el", id: element.id, dx: pt.x - element.x, dy: pt.y - element.y });
     }
@@ -754,6 +835,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
 
   const handleDeviceMouseDown = (e: MouseEvent<SVGGElement>, device: Device) => {
     e.stopPropagation();
+    if (isLockedObject(device.locked) && !e.altKey) return;
     if (mode === "delete") {
       removeDevice(device.id);
       return;
@@ -786,6 +868,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
     }
     select(device.id, "device");
     if (isEditMode && mode === "select") {
+      if (isLockedObject(device.locked)) return;
       const pt = toSvg(e.clientX, e.clientY);
       setDrag({ kind: "move-dev", id: device.id, dx: pt.x - device.x, dy: pt.y - device.y });
     }
@@ -824,6 +907,18 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
             stroke={color}
             strokeOpacity={0.4}
           />
+          {(isSel || isHl) && (
+            <circle
+              cx={device.x}
+              cy={device.y}
+              r={18}
+              fill="none"
+              stroke="#2563eb"
+              strokeWidth={2}
+              strokeOpacity={0.7}
+              pointerEvents="none"
+            />
+          )}
           <g
             onMouseDown={(e) => handleDeviceMouseDown(e, device)}
             onMouseEnter={() => setHover(device)}
@@ -848,6 +943,11 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
             >
               📹
             </text>
+            {device.locked && (isSel || isEditMode) && (
+              <text x={device.x + 14} y={device.y - 12} fontSize={11} fill="#6b7280">
+                🔒
+              </text>
+            )}
             {(device.ip === "" || device.password === "") && (
               <circle
                 cx={device.x + 10}
@@ -895,6 +995,20 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
           stroke={isSel || isHl ? "#0f172a" : color}
           strokeWidth={isSel || isHl || isSnap ? 2.8 : 1.5}
         />
+        {(isSel || isHl) && (
+          <rect
+            x={device.x - size.width / 2 - 4}
+            y={device.y - size.height / 2 - 4}
+            width={size.width + 8}
+            height={size.height + 8}
+            rx={10}
+            fill="none"
+            stroke="#2563eb"
+            strokeWidth={2}
+            strokeOpacity={0.7}
+            pointerEvents="none"
+          />
+        )}
         <g
           onMouseDown={(e) => handleDeviceMouseDown(e, device)}
           onMouseEnter={() => setHover(device)}
@@ -927,6 +1041,17 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
           >
             {label}
           </text>
+          {device.locked && (isSel || isEditMode) && (
+            <text
+              x={device.x + size.width / 2 - 10}
+              y={device.y - size.height / 2 + 12}
+              textAnchor="middle"
+              fontSize={11}
+              fill="#6b7280"
+            >
+              🔒
+            </text>
+          )}
         </g>
       </g>
     );
@@ -952,7 +1077,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
         onDoubleClick={(e) => {
           if (!draftCable || mode !== "connector" || !isEditMode) return;
           e.preventDefault();
-          const pt = resolveCableEndpoint(toSvg(e.clientX, e.clientY));
+          const pt = getDraftPreviewPoint(draftCable, toSvg(e.clientX, e.clientY));
           finalizeDraftCable(pt);
         }}
         style={{
@@ -975,18 +1100,249 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
         </defs>
         <rect x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="url(#grid-lg)" />
 
+
+        {floorEls.map((element) => {
+          const isSel = selectedId === element.id;
+          const isLocked = isLockedObject(element.locked);
+          const stroke = getElementStroke(element);
+
+          if (element.type === "text") {
+            const width = Math.max(60, (element.label?.length ?? 8) * 9 + 8);
+            return (
+              <g
+                key={element.id}
+                onMouseDown={(e) => handleElClick(e, element)}
+                style={{ cursor: isEditMode && !isLocked ? "move" : "pointer" }}
+              >
+                <text x={element.x} y={element.y} fontSize={16} fill={stroke} fontWeight={500}>
+                  {element.label}
+                </text>
+                {isSel && (
+                  <rect
+                    x={element.x - 4}
+                    y={element.y - 16}
+                    width={width}
+                    height={22}
+                    fill="none"
+                    stroke={isLocked ? "#94a3b8" : "#2563eb"}
+                    strokeDasharray="4 2"
+                    pointerEvents="none"
+                  />
+                )}
+                {(isSel || isEditMode) && isLocked && (
+                  <text x={element.x + width - 12} y={element.y - 18} fontSize={11} fill="#6b7280">
+                    🔒
+                  </text>
+                )}
+              </g>
+            );
+          }
+
+          if (element.type === "room") {
+            return (
+              <g
+                key={element.id}
+                onMouseDown={(e) => handleElClick(e, element)}
+                style={{ cursor: isEditMode && !isLocked ? "move" : "pointer" }}
+              >
+                <rect
+                  x={element.x}
+                  y={element.y}
+                  width={element.width}
+                  height={element.height}
+                  fill="none"
+                  stroke="transparent"
+                  strokeWidth={16}
+                  pointerEvents="stroke"
+                />
+                <rect
+                  x={element.x}
+                  y={element.y}
+                  width={element.width}
+                  height={element.height}
+                  fill="none"
+                  stroke={isSel ? "#2563eb" : stroke}
+                  strokeWidth={isSel ? 3 : 1.8}
+                  pointerEvents="none"
+                />
+                {element.label && (
+                  <text
+                    x={element.x + element.width / 2}
+                    y={element.y + 20}
+                    textAnchor="middle"
+                    fontSize={13}
+                    fill="#0f172a"
+                    fontWeight={600}
+                  >
+                    {element.label}
+                  </text>
+                )}
+                {isSel && isEditMode && !isLocked && (
+                  <>
+                    <rect
+                      x={element.x - 6}
+                      y={element.y - 6}
+                      width={12}
+                      height={12}
+                      fill="#2563eb"
+                      style={{ cursor: "nwse-resize" }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        const pt = toSvg(e.clientX, e.clientY);
+                        setDrag({
+                          kind: "resize-el",
+                          id: element.id,
+                          sx: pt.x,
+                          sy: pt.y,
+                          ow: element.width,
+                          oh: element.height,
+                        });
+                      }}
+                    />
+                    <rect
+                      x={element.x + element.width - 6}
+                      y={element.y - 6}
+                      width={12}
+                      height={12}
+                      fill="#2563eb"
+                      style={{ cursor: "nesw-resize" }}
+                    />
+                    <rect
+                      x={element.x - 6}
+                      y={element.y + element.height - 6}
+                      width={12}
+                      height={12}
+                      fill="#2563eb"
+                      style={{ cursor: "nesw-resize" }}
+                    />
+                    <rect
+                      x={element.x + element.width - 6}
+                      y={element.y + element.height - 6}
+                      width={12}
+                      height={12}
+                      fill="#2563eb"
+                      style={{ cursor: "nwse-resize" }}
+                    />
+                  </>
+                )}
+                {(isSel || isEditMode) && isLocked && (
+                  <text x={element.x + element.width - 12} y={element.y + 16} fontSize={11} fill="#6b7280">
+                    🔒
+                  </text>
+                )}
+              </g>
+            );
+          }
+
+          if (element.type === "wall") {
+            const x2 = element.x + element.width;
+            const y2 = element.y + element.height;
+            return (
+              <g
+                key={element.id}
+                onMouseDown={(e) => handleElClick(e, element)}
+                style={{ cursor: isEditMode && !isLocked ? "move" : "pointer" }}
+              >
+                <line
+                  x1={element.x}
+                  y1={element.y}
+                  x2={x2}
+                  y2={y2}
+                  stroke="transparent"
+                  strokeWidth={16}
+                  pointerEvents="stroke"
+                />
+                <line
+                  x1={element.x}
+                  y1={element.y}
+                  x2={x2}
+                  y2={y2}
+                  stroke={isSel ? "#2563eb" : stroke}
+                  strokeWidth={isSel ? 4 : 3}
+                  strokeLinecap="round"
+                  pointerEvents="none"
+                />
+                {(isSel || isEditMode) && isLocked && (
+                  <text x={(element.x + x2) / 2} y={(element.y + y2) / 2 - 8} fontSize={11} fill="#6b7280">
+                    🔒
+                  </text>
+                )}
+              </g>
+            );
+          }
+
+          const doorPath = `M ${element.x} ${element.y + element.height} A ${element.width} ${element.height} 0 0 1 ${element.x + element.width} ${element.y}`;
+          return (
+            <g
+              key={element.id}
+              onMouseDown={(e) => handleElClick(e, element)}
+              style={{ cursor: isEditMode && !isLocked ? "move" : "pointer" }}
+            >
+              <path
+                d={doorPath}
+                fill="none"
+                stroke="transparent"
+                strokeWidth={16}
+                pointerEvents="stroke"
+              />
+              <path
+                d={doorPath}
+                fill="none"
+                stroke={isSel ? "#2563eb" : stroke}
+                strokeWidth={isSel ? 3 : 2}
+                pointerEvents="none"
+              />
+              {isSel && isEditMode && !isLocked && (
+                <rect
+                  x={element.x + element.width - 6}
+                  y={element.y + element.height - 6}
+                  width={12}
+                  height={12}
+                  fill="#2563eb"
+                  style={{ cursor: "nwse-resize" }}
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    const pt = toSvg(e.clientX, e.clientY);
+                    setDrag({
+                      kind: "resize-el",
+                      id: element.id,
+                      sx: pt.x,
+                      sy: pt.y,
+                      ow: element.width,
+                      oh: element.height,
+                    });
+                  }}
+                />
+              )}
+              {(isSel || isEditMode) && isLocked && (
+                <text
+                  x={element.x + element.width / 2}
+                  y={element.y + element.height / 2 - 8}
+                  fontSize={11}
+                  fill="#6b7280"
+                >
+                  🔒
+                </text>
+              )}
+            </g>
+          );
+        })}
+
         {floorConnections.map((connection) => {
           const points = getConnectionPathPoints(connection);
           const path = buildCablePath(points[0], connection.points, points[points.length - 1]);
           const style = cableStyles[connection.type];
+          const stroke = getConnectionStroke(connection);
           const isSel = selectedConnection?.id === connection.id;
           const isHovered = hoverConnection?.id === connection.id;
+          const isLocked = isLockedObject(connection.locked);
+          const canEditConnection = isEditMode && isSel && !isLocked;
           return (
             <g key={connection.id}>
               <path
                 d={path}
                 fill="none"
-                stroke={style.stroke}
+                stroke={stroke}
                 strokeWidth={isSel ? style.width + 1.5 : style.width}
                 strokeDasharray={style.dash}
                 opacity={isSel || isHovered ? 1 : 0.8}
@@ -994,43 +1350,48 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
               />
               {points.slice(0, -1).map((start, index) => {
                 const end = points[index + 1];
-                const hoveredSegment = hoverSegment?.connectionId === connection.id && hoverSegment.index === index;
+                const hoveredSegment =
+                  hoverSegment?.connectionId === connection.id && hoverSegment.index === index;
                 const segmentPath = `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
                 return (
-                  <g key={`${connection.id}-segment-${index}`}>
-                    <path
-                      d={segmentPath}
-                      fill="none"
-                      stroke={hoveredSegment ? "#93c5fd" : "transparent"}
-                      strokeWidth={hoveredSegment ? style.width + 8 : 16}
-                      strokeDasharray={style.dash}
-                      opacity={hoveredSegment ? 0.35 : 0}
-                      pointerEvents="stroke"
-                      style={{ cursor: isEditMode ? "pointer" : "default" }}
-                      onMouseEnter={() => setHoverConnection(connection)}
-                      onMouseLeave={() => {
-                        setHoverConnection((current) => (current?.id === connection.id ? null : current));
-                        setHoverSegment((current) => (current?.connectionId === connection.id && current.index === index ? null : current));
-                      }}
-                      onMouseDown={(e) => {
-                        e.stopPropagation();
-                        select(connection.id, "connection");
-                        if (!isEditMode) return;
-                        if (e.ctrlKey) {
-                          insertConnectionPoint(connection.id, index, toSvg(e.clientX, e.clientY));
-                        }
-                      }}
-                      onDoubleClick={(e) => {
-                        e.stopPropagation();
-                        if (!isEditMode) return;
+                  <path
+                    key={`${connection.id}-segment-${index}`}
+                    d={segmentPath}
+                    fill="none"
+                    stroke={hoveredSegment ? "#93c5fd" : "transparent"}
+                    strokeWidth={hoveredSegment ? style.width + 8 : 16}
+                    strokeDasharray={style.dash}
+                    opacity={hoveredSegment ? 0.35 : 0}
+                    pointerEvents="stroke"
+                    style={{ cursor: isEditMode ? "pointer" : "default" }}
+                    onMouseEnter={() => {
+                      setHoverConnection(connection);
+                      setHoverSegment({ connectionId: connection.id, index });
+                    }}
+                    onMouseLeave={() => {
+                      setHoverConnection((current) => (current?.id === connection.id ? null : current));
+                      setHoverSegment((current) =>
+                        current?.connectionId === connection.id && current.index === index ? null : current,
+                      );
+                    }}
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      if (isLocked && !e.altKey) return;
+                      select(connection.id, "connection");
+                      if (!isEditMode) return;
+                      if (e.ctrlKey) {
                         insertConnectionPoint(connection.id, index, toSvg(e.clientX, e.clientY));
-                      }}
-                    />
-                  </g>
+                      }
+                    }}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      if (!isEditMode || (isLocked && !e.altKey)) return;
+                      insertConnectionPoint(connection.id, index, toSvg(e.clientX, e.clientY));
+                    }}
+                  />
                 );
               })}
-              {isSel &&
-                isEditMode &&
+              {canEditConnection &&
                 points.map((point, index) => {
                   const isStart = index === 0;
                   const isEnd = index === points.length - 1;
@@ -1046,7 +1407,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
                       cy={point.y}
                       r={handleSelected ? 6 : isIntermediate ? 4.5 : 5}
                       fill={handleSelected ? "#60a5fa" : "#fff"}
-                      stroke={style.stroke}
+                      stroke={stroke}
                       strokeWidth={handleSelected ? 3 : 2}
                       style={{ cursor: "grab" }}
                       onMouseDown={(e) => {
@@ -1074,11 +1435,21 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
                 y={(points[0].y + points[points.length - 1].y) / 2 - 6}
                 textAnchor="middle"
                 fontSize={10}
-                fill={style.stroke}
+                fill={stroke}
                 fontWeight={700}
               >
                 {cableLabels[connection.type]}
               </text>
+              {isLocked && (isSel || isEditMode) && (
+                <text
+                  x={(points[0].x + points[points.length - 1].x) / 2 + 18}
+                  y={(points[0].y + points[points.length - 1].y) / 2 - 4}
+                  fontSize={11}
+                  fill="#6b7280"
+                >
+                  🔒
+                </text>
+              )}
             </g>
           );
         })}
@@ -1094,95 +1465,6 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
             pointerEvents="none"
           />
         )}
-
-        {floorEls.map((element) => {
-          const isSel = selectedId === element.id;
-          if (element.type === "text") {
-            return (
-              <g
-                key={element.id}
-                onMouseDown={(e) => handleElClick(e, element)}
-                style={{ cursor: isEditMode ? "move" : "pointer" }}
-              >
-                <text x={element.x} y={element.y} fontSize={16} fill="#111" fontWeight={500}>
-                  {element.label}
-                </text>
-                {isSel && (
-                  <rect
-                    x={element.x - 4}
-                    y={element.y - 16}
-                    width={(element.label?.length ?? 0) * 9 + 8}
-                    height={22}
-                    fill="none"
-                    stroke="#2563eb"
-                    strokeDasharray="4 2"
-                  />
-                )}
-              </g>
-            );
-          }
-
-          return (
-            <g
-              key={element.id}
-              onMouseDown={(e) => handleElClick(e, element)}
-              style={{ cursor: "move" }}
-            >
-              <rect
-                x={element.x}
-                y={element.y}
-                width={element.width}
-                height={element.height}
-                fill={element.color ?? "#dbeafe"}
-                fillOpacity={element.type === "wall" ? 1 : 0.5}
-                stroke={isSel ? "#2563eb" : element.type === "wall" ? "#1f2937" : "#64748b"}
-                strokeWidth={isSel ? 2 : element.type === "wall" ? 0 : 1.5}
-              />
-              {element.label && element.type === "room" && (
-                <text
-                  x={element.x + element.width / 2}
-                  y={element.y + 20}
-                  textAnchor="middle"
-                  fontSize={13}
-                  fill="#0f172a"
-                  fontWeight={600}
-                >
-                  {element.label}
-                </text>
-              )}
-              {element.type === "door" && (
-                <path
-                  d={`M ${element.x} ${element.y + element.height} A ${element.width} ${element.height} 0 0 1 ${element.x + element.width} ${element.y}`}
-                  fill="none"
-                  stroke="#a16207"
-                  strokeWidth={2}
-                />
-              )}
-              {isEditMode && isSel && element.type !== "wall" && (
-                <rect
-                  x={element.x + element.width - 6}
-                  y={element.y + element.height - 6}
-                  width={12}
-                  height={12}
-                  fill="#2563eb"
-                  style={{ cursor: "nwse-resize" }}
-                  onMouseDown={(e) => {
-                    e.stopPropagation();
-                    const pt = toSvg(e.clientX, e.clientY);
-                    setDrag({
-                      kind: "resize-el",
-                      id: element.id,
-                      sx: pt.x,
-                      sy: pt.y,
-                      ow: element.width,
-                      oh: element.height,
-                    });
-                  }}
-                />
-              )}
-            </g>
-          );
-        })}
 
         {floorDevices.map((device) => renderDevice(device))}
       </svg>

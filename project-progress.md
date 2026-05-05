@@ -22,6 +22,7 @@
   - demo data
 - Добавлен инструмент `Кабель / Connector` с кабельной моделью, snap to grid и привязкой к устройствам.
 - Кабели теперь сохраняются в `deviceConnections` вместе с типом, точками маршрута и endpoint-привязками.
+- Добавлены цвета и `locked` для map elements и cables, а также outline-only rooms, hitboxes и явный сброс selection по клику в пустоту.
 - Исправлена packaged-раздача статических assets из `dist/client`, чтобы свежий Windows `exe` открывал нормальный UI вместо unstyled/black screen.
 - Собран свежий unpacked-билд в `release-view\win-unpacked\CCTV Manager.exe`.
 - Добавлен undo/redo через `Ctrl+Z`, `Ctrl+Shift+Z` и `Ctrl+Y` для изменений объектов, зон, плана и устройств.

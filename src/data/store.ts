@@ -215,6 +215,7 @@ function createElementRecord(
   return {
     ...element,
     id: nanoid(),
+    locked: element.locked ?? false,
     createdAt: now,
     updatedAt: now,
   };
@@ -225,6 +226,7 @@ function createDeviceRecord(device: Omit<Device, "id" | "createdAt" | "updatedAt
   return {
     ...device,
     id: nanoid(),
+    locked: device.locked ?? false,
     createdAt: now,
     updatedAt: now,
   };
@@ -254,6 +256,7 @@ function cloneConnectionRecord(
   return {
     ...base,
     ...patch,
+    locked: patch.locked ?? connection.locked ?? false,
     points: patch.points ?? connection.points.map((point) => ({ ...point })),
   };
 }
@@ -617,6 +620,7 @@ export const useStore = create<State>()((set, get) => ({
         {
           ...connection,
           id: nanoid(),
+          locked: connection.locked ?? false,
           createdAt: timestamp(),
           updatedAt: timestamp(),
         },
@@ -631,6 +635,7 @@ export const useStore = create<State>()((set, get) => ({
           ? {
               ...connection,
               ...patch,
+              locked: patch.locked ?? connection.locked ?? false,
               points: patch.points ? patch.points.map((point) => ({ ...point })) : connection.points,
               updatedAt: timestamp(),
             }
@@ -678,6 +683,7 @@ export const useStore = create<State>()((set, get) => ({
               y: toAnchor.y,
             },
             points: [],
+            locked: false,
             label: cableType.toUpperCase(),
             notes: "",
             createdAt: timestamp(),

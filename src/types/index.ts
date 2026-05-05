@@ -28,6 +28,8 @@ export interface DeviceConnection {
   from: CableEndpoint;
   to: CableEndpoint;
   points: CablePoint[];
+  color?: string;
+  locked?: boolean;
   label?: string;
   notes?: string;
   createdAt: string;
@@ -51,6 +53,7 @@ export interface Device {
   x: number;
   y: number;
   rotation?: number;
+  locked?: boolean;
   createdAt: string;
   updatedAt: string;
 
@@ -87,6 +90,7 @@ export interface MapElement {
   height: number;
   label?: string;
   color?: string;
+  locked?: boolean;
   rotation?: number;
   createdAt: string;
   updatedAt: string;

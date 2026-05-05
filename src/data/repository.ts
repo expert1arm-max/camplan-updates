@@ -72,6 +72,10 @@ function asNumber(value: unknown, fallback = 0) {
   return Number.isFinite(number) ? number : fallback;
 }
 
+function asBoolean(value: unknown, fallback = false) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
@@ -181,6 +185,7 @@ function normalizeElement(input: unknown): MapElement {
     height: asNumber(record.height, 0),
     label: typeof record.label === "string" && record.label ? record.label : undefined,
     color: typeof record.color === "string" && record.color ? record.color : undefined,
+    locked: asBoolean(record.locked, false),
     rotation: record.rotation === undefined ? undefined : asNumber(record.rotation, 0),
     createdAt: String(timestamp),
     updatedAt: asString(record.updatedAt, String(timestamp)),
@@ -245,6 +250,7 @@ function normalizeDevice(input: unknown): Device {
     x: asNumber(record.x, 0),
     y: asNumber(record.y, 0),
     rotation: record.rotation === undefined ? undefined : asNumber(record.rotation, 0),
+    locked: asBoolean(record.locked, false),
     createdAt: String(timestamp),
     updatedAt: asString(record.updatedAt, String(timestamp)),
     rtspUrl: asString(record.rtspUrl ?? record.rtsp, ""),
@@ -287,6 +293,8 @@ function normalizeConnection(input: unknown): DeviceConnection {
     points,
     label: typeof record.label === "string" && record.label ? record.label : undefined,
     notes: typeof record.notes === "string" && record.notes ? record.notes : undefined,
+    color: typeof record.color === "string" && record.color ? record.color : undefined,
+    locked: asBoolean(record.locked, false),
     createdAt: String(timestamp),
     updatedAt: asString(record.updatedAt, String(timestamp)),
   };
