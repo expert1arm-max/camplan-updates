@@ -189,38 +189,55 @@ function CameraPanel({
         </Field>
 
         <Field label="Пароль">
-          <div className="flex gap-1">
-            <Input
-              type={showPwd ? "text" : "password"}
-              value={cam.password}
-              onChange={(e) => onUpdate({ password: e.target.value })}
-              className="h-8 font-mono"
-              disabled={!canEdit}
-            />
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-8 px-2 shrink-0"
-              onClick={() => setShowPwd((value) => !value)}
-            >
-              {showPwd ? (
-                <>
-                  <EyeOff className="h-3 w-3 mr-1" /> Скрыть
-                </>
-              ) : (
-                <>
-                  <Eye className="h-3 w-3 mr-1" /> Показать пароль
-                </>
+          <div className="space-y-2">
+            <div className="relative">
+              <Input
+                type="text"
+                value={cam.password}
+                onChange={(e) => onUpdate({ password: e.target.value })}
+                className={`h-8 w-full font-mono pr-3 ${
+                  showPwd ? "" : "text-transparent caret-foreground"
+                }`}
+                style={showPwd ? undefined : { caretColor: "hsl(var(--foreground))" }}
+                disabled={!canEdit}
+                spellCheck={false}
+                autoComplete="new-password"
+              />
+              {!showPwd && cam.password && (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 flex items-center px-3 font-mono text-foreground/75 overflow-hidden whitespace-nowrap"
+                >
+                  {"*".repeat(cam.password.length)}
+                </div>
               )}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-8 px-2 shrink-0"
-              onClick={() => copy(cam.password)}
-            >
-              <Copy className="h-3 w-3 mr-1" /> Скопировать пароль
-            </Button>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2 shrink-0"
+                onClick={() => setShowPwd((value) => !value)}
+              >
+                {showPwd ? (
+                  <>
+                    <EyeOff className="h-3 w-3 mr-1" /> Скрыть
+                  </>
+                ) : (
+                  <>
+                    <Eye className="h-3 w-3 mr-1" /> Показать пароль
+                  </>
+                )}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2 shrink-0"
+                onClick={() => copy(cam.password)}
+              >
+                <Copy className="h-3 w-3 mr-1" /> Скопировать пароль
+              </Button>
+            </div>
           </div>
           {/* TODO: later master password encryption. */}
         </Field>
