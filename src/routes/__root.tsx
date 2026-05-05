@@ -75,6 +75,8 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const undo = useStore((state) => state.undo);
   const redo = useStore((state) => state.redo);
+  const copySelected = useStore((state) => state.copySelected);
+  const pasteClipboard = useStore((state) => state.pasteClipboard);
 
   useEffect(() => {
     void bootstrapStore();
@@ -105,12 +107,24 @@ function RootComponent() {
       if (shortcutKey === "y") {
         event.preventDefault();
         redo();
+        return;
+      }
+
+      if (shortcutKey === "c") {
+        event.preventDefault();
+        copySelected();
+        return;
+      }
+
+      if (shortcutKey === "v") {
+        event.preventDefault();
+        pasteClipboard();
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [redo, undo]);
+  }, [copySelected, pasteClipboard, redo, undo]);
 
   return <Outlet />;
 }

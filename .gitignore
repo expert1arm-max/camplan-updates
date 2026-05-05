@@ -11,9 +11,7 @@ node_modules
 dist
 dist-ssr
 release
-release-fix
-release-test
-release-undo
+release-*
 .output
 .vinxi
 .tanstack/**

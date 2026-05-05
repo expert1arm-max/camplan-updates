@@ -48,6 +48,8 @@ interface State extends AppData {
   updateCamera: (id: string, patch: Partial<Camera>) => void;
   removeCamera: (id: string) => void;
   duplicateCamera: (id: string) => void;
+  copySelected: () => void;
+  pasteClipboard: () => void;
 
   undo: () => void;
   redo: () => void;
@@ -64,6 +66,12 @@ type EditorSnapshot = AppData & {
   selectedKind: "camera" | "element" | null;
   mode: EditorMode;
 };
+
+type ClipboardItem =
+  | { kind: "camera"; camera: Camera }
+  | { kind: "element"; element: MapElement };
+
+let clipboardItem: ClipboardItem | null = null;
 
 function timestamp() {
   return new Date().toISOString();
@@ -187,6 +195,22 @@ function createCameraRecord(camera: Omit<Camera, "id" | "createdAt" | "updatedAt
     createdAt: now,
     updatedAt: now,
   };
+}
+
+function cloneCameraRecord(camera: Camera, patch: Partial<Camera> = {}): Camera {
+  const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...base } = camera;
+  return createCameraRecord({
+    ...base,
+    ...patch,
+  });
+}
+
+function cloneElementRecord(element: MapElement, patch: Partial<MapElement> = {}): MapElement {
+  const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...base } = element;
+  return createElementRecord({
+    ...base,
+    ...patch,
+  });
 }
 
 const initial = createDemoData();
@@ -425,14 +449,64 @@ export const useStore = create<State>()((set, get) => ({
   duplicateCamera: (id) => {
     const cam = get().cameras.find((item) => item.id === id);
     if (!cam) return;
-    const copy = createCameraRecord({
-      ...cam,
+    const copy = cloneCameraRecord(cam, {
       name: `${cam.name} (копия)`,
       x: cam.x + 30,
       y: cam.y + 30,
     });
     mutate(set, get, (state) => ({
       cameras: [...state.cameras, copy],
+    }));
+  },
+
+  copySelected: () => {
+    const state = get();
+    if (state.selectedKind === "camera" && state.selectedId) {
+      const camera = state.cameras.find((item) => item.id === state.selectedId);
+      clipboardItem = camera ? { kind: "camera", camera } : null;
+      return;
+    }
+
+    if (state.selectedKind === "element" && state.selectedId) {
+      const element = state.mapElements.find((item) => item.id === state.selectedId);
+      clipboardItem = element ? { kind: "element", element } : null;
+      return;
+    }
+
+    clipboardItem = null;
+  },
+
+  pasteClipboard: () => {
+    const state = get();
+    if (!clipboardItem) return;
+
+    if (clipboardItem.kind === "camera") {
+      const source = clipboardItem.camera;
+      const copy = cloneCameraRecord(source, {
+        floorId: state.activeFloorId ?? source.floorId,
+        objectId: state.activeObjectId ?? source.objectId,
+        name: `${source.name} (копия)`,
+        x: source.x + 30,
+        y: source.y + 30,
+      });
+      mutate(set, get, (current) => ({
+        cameras: [...current.cameras, copy],
+        selectedId: copy.id,
+        selectedKind: "camera",
+      }));
+      return;
+    }
+
+    const source = clipboardItem.element;
+    const copy = cloneElementRecord(source, {
+      floorId: state.activeFloorId ?? source.floorId,
+      x: source.x + 30,
+      y: source.y + 30,
+    });
+    mutate(set, get, (current) => ({
+      mapElements: [...current.mapElements, copy],
+      selectedId: copy.id,
+      selectedKind: "element",
     }));
   },
 

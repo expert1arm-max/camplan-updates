@@ -22,6 +22,7 @@
 - Исправлена packaged-раздача статических assets из `dist/client`, чтобы свежий Windows `exe` открывал нормальный UI вместо unstyled/black screen.
 - Собран свежий unpacked-билд в `release-test\win-unpacked\CCTV Manager.exe`.
 - Добавлен undo/redo через `Ctrl+Z`, `Ctrl+Shift+Z` и `Ctrl+Y` для изменений объектов, зон, плана и камер.
+- Добавлены copy/paste hotkeys (`Ctrl+C`, `Ctrl+V`) для выбранной камеры или элемента плана.
 - Добавлены команды:
   - `npm run dev`
   - `npm run dev:desktop`

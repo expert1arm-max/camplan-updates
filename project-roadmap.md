@@ -8,6 +8,7 @@ MVP desktop-версии собран и упаковывается.
 - При необходимости убрать оставшиеся lint warnings в shared UI.
 - Проверить свежий unpacked Windows build из `release-test` на запуск и отображение стилей.
 - Проверить undo/redo по горячим клавишам в Electron-окне.
+- Проверить copy/paste выбранной камеры или элемента плана по горячим клавишам.
 
 ## Следующий шаг
 - Провести ручную проверку в Electron-окне:
@@ -18,3 +19,4 @@ MVP desktop-версии собран и упаковывается.
   - импорт JSON
   - экспорт JSON/CSV
   - undo/redo через `Ctrl+Z`, `Ctrl+Shift+Z`, `Ctrl+Y`
+  - copy/paste через `Ctrl+C`, `Ctrl+V`
