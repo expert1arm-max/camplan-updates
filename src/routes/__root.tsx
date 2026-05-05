@@ -2,7 +2,7 @@ import { useEffect, type ReactNode } from "react";
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
-import { bootstrapStore } from "@/data/store";
+import { bootstrapStore, useStore } from "@/data/store";
 
 function NotFoundComponent() {
   return (
@@ -73,9 +73,44 @@ function RootShell({ children }: { children: ReactNode }) {
 }
 
 function RootComponent() {
+  const undo = useStore((state) => state.undo);
+  const redo = useStore((state) => state.redo);
+
   useEffect(() => {
     void bootstrapStore();
   }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      const isEditable =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLElement && target.isContentEditable);
+      if (isEditable) return;
+
+      const shortcutKey = event.key.toLowerCase();
+      if (!(event.ctrlKey || event.metaKey)) return;
+
+      if (shortcutKey === "z") {
+        event.preventDefault();
+        if (event.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+        return;
+      }
+
+      if (shortcutKey === "y") {
+        event.preventDefault();
+        redo();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [redo, undo]);
 
   return <Outlet />;
 }

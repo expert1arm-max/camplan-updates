@@ -21,6 +21,8 @@ interface State extends AppData {
   mode: EditorMode;
   savedAt: number;
   isHydrated: boolean;
+  history: EditorSnapshot[];
+  future: EditorSnapshot[];
 
   hydrate: (data: AppData) => void;
   setActiveObject: (id: string | null) => void;
@@ -47,11 +49,21 @@ interface State extends AppData {
   removeCamera: (id: string) => void;
   duplicateCamera: (id: string) => void;
 
+  undo: () => void;
+  redo: () => void;
   updateSettings: (patch: Partial<AppSettings>) => void;
   importJSON: (data: string) => void;
   exportJSON: () => string;
   resetDemo: () => void;
 }
+
+type EditorSnapshot = AppData & {
+  activeObjectId: string | null;
+  activeFloorId: string | null;
+  selectedId: string | null;
+  selectedKind: "camera" | "element" | null;
+  mode: EditorMode;
+};
 
 function timestamp() {
   return new Date().toISOString();
@@ -65,6 +77,57 @@ function selectData(state: State): AppData {
     cameras: state.cameras,
     settings: state.settings,
   };
+}
+
+function snapshotState(state: State): EditorSnapshot {
+  return {
+    objects: state.objects,
+    floors: state.floors,
+    mapElements: state.mapElements,
+    cameras: state.cameras,
+    settings: state.settings,
+    activeObjectId: state.activeObjectId,
+    activeFloorId: state.activeFloorId,
+    selectedId: state.selectedId,
+    selectedKind: state.selectedKind,
+    mode: state.mode,
+  };
+}
+
+function restoreSnapshot(snapshot: EditorSnapshot) {
+  return {
+    objects: snapshot.objects,
+    floors: snapshot.floors,
+    mapElements: snapshot.mapElements,
+    cameras: snapshot.cameras,
+    settings: snapshot.settings,
+    activeObjectId: snapshot.activeObjectId,
+    activeFloorId: snapshot.activeFloorId,
+    selectedId: snapshot.selectedId,
+    selectedKind: snapshot.selectedKind,
+    mode: snapshot.mode,
+    isHydrated: true,
+    savedAt: Date.now(),
+  };
+}
+
+function pushHistory(state: State, snapshot: EditorSnapshot) {
+  return [...state.history, snapshot].slice(-50);
+}
+
+function mutate(
+  set: any,
+  get: () => State,
+  recipe: (state: State) => Partial<State>,
+) {
+  const before = snapshotState(get());
+  set((state) => ({
+    ...recipe(state),
+    history: pushHistory(state, before),
+    future: [],
+    savedAt: Date.now(),
+  }));
+  persistSnapshot(get());
 }
 
 function persistSnapshot(state: State) {
@@ -137,6 +200,8 @@ export const useStore = create<State>()((set, get) => ({
   mode: "select",
   savedAt: Date.now(),
   isHydrated: false,
+  history: [],
+  future: [],
 
   hydrate: (data) =>
     set((state) => ({
@@ -149,6 +214,8 @@ export const useStore = create<State>()((set, get) => ({
       mode: "select",
       savedAt: Date.now(),
       isHydrated: true,
+      history: [],
+      future: [],
     })),
 
   setActiveObject: (id) =>
@@ -208,19 +275,17 @@ export const useStore = create<State>()((set, get) => ({
 
   addObject: (name) => {
     const next = createObjectRecord(name);
-    set((state) => ({
+    mutate(set, get, (state) => ({
       objects: [...state.objects, next],
       activeObjectId: next.id,
       activeFloorId: null,
       selectedId: null,
       selectedKind: null,
-      savedAt: Date.now(),
     }));
-    persistSnapshot(get());
   },
 
   renameObject: (id, name, description) => {
-    set((state) => ({
+    mutate(set, get, (state) => ({
       objects: state.objects.map((object) =>
         object.id === id
           ? {
@@ -231,13 +296,11 @@ export const useStore = create<State>()((set, get) => ({
             }
           : object,
       ),
-      savedAt: Date.now(),
     }));
-    persistSnapshot(get());
   },
 
   removeObject: (id) => {
-    set((state) => {
+    mutate(set, get, (state) => {
       const remainingObjects = state.objects.filter((object) => object.id !== id);
       const remainingFloors = state.floors.filter((floor) => floor.objectId !== id);
       const remainingFloorIds = new Set(remainingFloors.map((floor) => floor.id));
@@ -256,10 +319,8 @@ export const useStore = create<State>()((set, get) => ({
         activeFloorId: nextFloor?.id ?? null,
         selectedId: null,
         selectedKind: null,
-        savedAt: Date.now(),
       };
     });
-    persistSnapshot(get());
   },
 
   addFloor: (objectId, name) => {
@@ -271,19 +332,17 @@ export const useStore = create<State>()((set, get) => ({
           .map((floor) => floor.sortOrder),
       ) + 1;
     const next = createFloorRecord(objectId, name, nextSortOrder);
-    set((state) => ({
+    mutate(set, get, (state) => ({
       floors: [...state.floors, next],
       activeObjectId: objectId,
       activeFloorId: next.id,
       selectedId: null,
       selectedKind: null,
-      savedAt: Date.now(),
     }));
-    persistSnapshot(get());
   },
 
   renameFloor: (id, name) => {
-    set((state) => ({
+    mutate(set, get, (state) => ({
       floors: state.floors.map((floor) =>
         floor.id === id
           ? {
@@ -293,13 +352,11 @@ export const useStore = create<State>()((set, get) => ({
             }
           : floor,
       ),
-      savedAt: Date.now(),
     }));
-    persistSnapshot(get());
   },
 
   removeFloor: (id) => {
-    set((state) => {
+    mutate(set, get, (state) => {
       const floors = state.floors.filter((floor) => floor.id !== id);
       const cameras = state.cameras.filter((camera) => camera.floorId !== id);
       const mapElements = state.mapElements.filter((element) => element.floorId !== id);
@@ -313,70 +370,56 @@ export const useStore = create<State>()((set, get) => ({
         activeObjectId: nextFloor?.objectId ?? state.activeObjectId ?? null,
         selectedId: null,
         selectedKind: null,
-        savedAt: Date.now(),
       };
     });
-    persistSnapshot(get());
   },
 
   addElement: (element) => {
     const next = createElementRecord(element);
-    set((state) => ({
+    mutate(set, get, (state) => ({
       mapElements: [...state.mapElements, next],
       selectedId: next.id,
       selectedKind: "element",
-      savedAt: Date.now(),
     }));
-    persistSnapshot(get());
     return next.id;
   },
 
   updateElement: (id, patch) => {
-    set((state) => ({
+    mutate(set, get, (state) => ({
       mapElements: updateList(state.mapElements, id, patch),
-      savedAt: Date.now(),
     }));
-    persistSnapshot(get());
   },
 
   removeElement: (id) => {
-    set((state) => ({
+    mutate(set, get, (state) => ({
       mapElements: state.mapElements.filter((element) => element.id !== id),
       selectedId: state.selectedId === id ? null : state.selectedId,
       selectedKind: state.selectedId === id ? null : state.selectedKind,
-      savedAt: Date.now(),
     }));
-    persistSnapshot(get());
   },
 
   addCamera: (camera) => {
     const next = createCameraRecord(camera);
-    set((state) => ({
+    mutate(set, get, (state) => ({
       cameras: [...state.cameras, next],
       selectedId: next.id,
       selectedKind: "camera",
-      savedAt: Date.now(),
     }));
-    persistSnapshot(get());
     return next.id;
   },
 
   updateCamera: (id, patch) => {
-    set((state) => ({
+    mutate(set, get, (state) => ({
       cameras: updateList(state.cameras, id, patch),
-      savedAt: Date.now(),
     }));
-    persistSnapshot(get());
   },
 
   removeCamera: (id) => {
-    set((state) => ({
+    mutate(set, get, (state) => ({
       cameras: state.cameras.filter((camera) => camera.id !== id),
       selectedId: state.selectedId === id ? null : state.selectedId,
       selectedKind: state.selectedId === id ? null : state.selectedKind,
-      savedAt: Date.now(),
     }));
-    persistSnapshot(get());
   },
 
   duplicateCamera: (id) => {
@@ -388,51 +431,71 @@ export const useStore = create<State>()((set, get) => ({
       x: cam.x + 30,
       y: cam.y + 30,
     });
-    set((state) => ({
+    mutate(set, get, (state) => ({
       cameras: [...state.cameras, copy],
-      savedAt: Date.now(),
     }));
+  },
+
+  undo: () => {
+    set((state) => {
+      const previous = state.history.at(-1);
+      if (!previous) return state;
+      const current = snapshotState(state);
+      return {
+        ...restoreSnapshot(previous),
+        history: state.history.slice(0, -1),
+        future: [...state.future, current].slice(-50),
+      };
+    });
+    persistSnapshot(get());
+  },
+
+  redo: () => {
+    set((state) => {
+      const next = state.future.at(-1);
+      if (!next) return state;
+      const current = snapshotState(state);
+      return {
+        ...restoreSnapshot(next),
+        history: [...state.history, current].slice(-50),
+        future: state.future.slice(0, -1),
+      };
+    });
     persistSnapshot(get());
   },
 
   updateSettings: (patch) => {
-    set((state) => ({
+    mutate(set, get, (state) => ({
       settings: { ...state.settings, ...patch },
-      savedAt: Date.now(),
     }));
-    persistSnapshot(get());
   },
 
   importJSON: (data) => {
     const parsed = normalizeAppData(JSON.parse(data));
-    set({
+    mutate(set, get, () => ({
       ...parsed,
       activeObjectId: parsed.objects[0]?.id ?? null,
       activeFloorId: parsed.floors[0]?.id ?? null,
       selectedId: null,
       selectedKind: null,
       mode: "select",
-      savedAt: Date.now(),
       isHydrated: true,
-    });
-    persistSnapshot(get());
+    }));
   },
 
   exportJSON: () => JSON.stringify(selectData(get()), null, 2),
 
   resetDemo: () => {
     const demo = createDemoData();
-    set({
+    mutate(set, get, () => ({
       ...demo,
       activeObjectId: demo.objects[0]?.id ?? null,
       activeFloorId: demo.floors[0]?.id ?? null,
       selectedId: null,
       selectedKind: null,
       mode: "select",
-      savedAt: Date.now(),
       isHydrated: true,
-    });
-    persistSnapshot(get());
+    }));
   },
 }));
 

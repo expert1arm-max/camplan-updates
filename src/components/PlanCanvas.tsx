@@ -47,6 +47,11 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
   const floorEls = mapElements.filter((element) => element.floorId === activeFloorId);
   const floorCams = cameras.filter((camera) => camera.floorId === activeFloorId);
 
+  const isEditableTarget = (target: EventTarget | null) =>
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    (target instanceof HTMLElement && target.isContentEditable);
+
   const toSvg = (clientX: number, clientY: number) => {
     const svg = svgRef.current;
     if (!svg) return { x: 0, y: 0 };
@@ -202,7 +207,9 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (isEditableTarget(e.target)) return;
       if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
         if (selectedKind === "camera" && selectedId) removeCamera(selectedId);
         if (selectedKind === "element" && selectedId) removeElement(selectedId);
       }
