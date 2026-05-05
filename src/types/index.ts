@@ -116,6 +116,7 @@ export interface SiteObject {
 export interface AppSettings {
   theme: "system" | "light" | "dark";
   masterPasswordEncryption: "todo" | "enabled";
+  roomColorPreset: string;
 }
 
 export interface AppData {

@@ -12,6 +12,7 @@ import type {
   MapElement,
   SiteObject,
 } from "@/types";
+import { DEFAULT_ROOM_COLOR } from "@/utils/room-colors";
 
 const DB_NAME = "camplan-local";
 const DB_VERSION = 3;
@@ -21,6 +22,7 @@ const STORAGE_KEY = "current";
 const DEFAULT_SETTINGS: AppData["settings"] = {
   theme: "system",
   masterPasswordEncryption: "todo",
+  roomColorPreset: DEFAULT_ROOM_COLOR,
 };
 
 const statusMap: Record<string, DeviceStatus> = {
@@ -140,6 +142,10 @@ function normalizeSettings(input: unknown): AppSettings {
       record.masterPasswordEncryption === "enabled"
         ? "enabled"
         : DEFAULT_SETTINGS.masterPasswordEncryption,
+    roomColorPreset:
+      typeof record.roomColorPreset === "string" && record.roomColorPreset
+        ? record.roomColorPreset
+        : DEFAULT_SETTINGS.roomColorPreset,
   };
 }
 

@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { ROOM_PRESET_COLORS } from "@/utils/room-colors";
 
 const statuses: DeviceStatus[] = ["working", "offline", "needs_check", "reserve", "no_access"];
 const deviceTypes: DeviceType[] = ["camera", "nvr", "dvr", "switch", "poe_switch"];
@@ -29,7 +30,7 @@ const cableDefaultColors: Record<CableType, string> = {
   coaxial: "#6b21a8",
   power: "#b45309",
 };
-const quickColors = ["#2563eb", "#16a34a", "#d97706", "#dc2626", "#64748b", "#8b5cf6"];
+const quickColors = [...ROOM_PRESET_COLORS];
 
 export function PropertiesPanel() {
   const {
@@ -43,6 +44,7 @@ export function PropertiesPanel() {
     updateDevice,
     updateDeviceConnection,
     updateElement,
+    updateSettings,
     removeDevice,
     duplicateDevice,
     removeDeviceConnection,
@@ -108,9 +110,10 @@ export function PropertiesPanel() {
       canEdit={isEditMode}
       onEnterEditMode={() => setEditMode(true)}
       onUpdate={(patch) => updateElement(element.id, patch)}
+      onPresetColorChange={(color) => updateSettings({ roomColorPreset: color })}
       onDelete={() => removeElement(element.id)}
     />
-  );
+    );
 }
 
 function DevicePanel({
@@ -768,12 +771,14 @@ function ElementPanel({
   canEdit,
   onEnterEditMode,
   onUpdate,
+  onPresetColorChange,
   onDelete,
 }: {
   el: MapElement;
   canEdit: boolean;
   onEnterEditMode: () => void;
   onUpdate: (p: Partial<MapElement>) => void;
+  onPresetColorChange: (color: string) => void;
   onDelete: () => void;
 }) {
   return (
@@ -815,7 +820,10 @@ function ElementPanel({
         <Field label={el.type === "text" ? "Цвет текста" : "Цвет"}>
           <ColorControl
             value={el.color ?? (el.type === "text" ? "#111827" : "#64748b")}
-            onChange={(color) => onUpdate({ color })}
+            onChange={(color) => {
+              onUpdate({ color });
+              if (el.type === "room") onPresetColorChange(color);
+            }}
             disabled={!canEdit}
           />
         </Field>

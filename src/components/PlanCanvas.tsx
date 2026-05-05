@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent, type WheelEvent } from "react";
 import { deviceTypeLabels, statusColors, useStore } from "@/data/store";
 import type { CableAnchor, CablePoint, CableType, Device, DeviceConnection, DeviceType, MapElement } from "@/types";
+import { DEFAULT_ROOM_COLOR } from "@/utils/room-colors";
 
 interface ViewBox {
   x: number;
@@ -194,6 +195,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
     mapElements,
     devices,
     deviceConnections,
+    settings,
     isEditMode,
     mode,
     setMode,
@@ -238,6 +240,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
   const floorConnections = deviceConnections.filter((connection) => connection.floorId === activeFloorId);
   const selectedConnection =
     selectedKind === "connection" ? floorConnections.find((connection) => connection.id === selectedId) ?? null : null;
+  const roomColorPreset = settings.roomColorPreset || DEFAULT_ROOM_COLOR;
 
   const isEditableTarget = (target: EventTarget | null) =>
     target instanceof HTMLInputElement ||
@@ -565,7 +568,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
         width: 1,
         height: 1,
         label: "Помещение",
-        color: "#dbeafe",
+        color: roomColorPreset,
         rotation: 0,
       });
       setDrag({ kind: "draw-room", sx: pt.x, sy: pt.y, id });
@@ -723,6 +726,9 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
   };
 
   const onMouseUp = () => {
+    if (drag?.kind === "draw-room") {
+      setMode("select");
+    }
     if (drag?.kind === "draw-wall") {
       setMode("select");
     }
@@ -1162,7 +1168,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
                   height={element.height}
                   fill="none"
                   stroke={isSel ? "#2563eb" : stroke}
-                  strokeWidth={isSel ? 3 : 1.8}
+                  strokeWidth={isSel ? 6 : 4.5}
                   pointerEvents="none"
                 />
                 {element.label && (

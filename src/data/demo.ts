@@ -1,4 +1,5 @@
 import type { AppData } from "@/types";
+import { DEFAULT_ROOM_COLOR } from "@/utils/room-colors";
 
 const now = "2026-05-05T00:00:00.000Z";
 
@@ -7,6 +8,7 @@ export function createDemoData(): AppData {
     settings: {
       theme: "system",
       masterPasswordEncryption: "todo",
+      roomColorPreset: DEFAULT_ROOM_COLOR,
     },
     objects: [
       {
