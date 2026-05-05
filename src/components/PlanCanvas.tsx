@@ -231,7 +231,6 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
     | { kind: "resize-el"; id: string; sx: number; sy: number; ow: number; oh: number }
     | { kind: "draw-wall"; sx: number; sy: number; id: string }
     | { kind: "rotate-dev"; id: string; cx: number; cy: number }
-    | { kind: "draw-room"; sx: number; sy: number; id: string }
     | null
   >(null);
 
@@ -563,16 +562,16 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
       const id = addElement({
         floorId: activeFloorId,
         type: "room",
-        x: pt.x,
-        y: pt.y,
-        width: 1,
-        height: 1,
+        x: pt.x - 100,
+        y: pt.y - 100,
+        width: 200,
+        height: 200,
         label: "Помещение",
         color: roomColorPreset,
         rotation: 0,
       });
-      setDrag({ kind: "draw-room", sx: pt.x, sy: pt.y, id });
       select(id, "element");
+      setMode("select");
       return;
     }
 
@@ -666,16 +665,6 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
 
     if (!isEditMode) return;
 
-    if (drag.kind === "draw-room") {
-      updateElement(drag.id, {
-        x: Math.min(drag.sx, pt.x),
-        y: Math.min(drag.sy, pt.y),
-        width: Math.abs(pt.x - drag.sx),
-        height: Math.abs(pt.y - drag.sy),
-      });
-      return;
-    }
-
     if (drag.kind === "draw-wall") {
       const constrained = getDirectionConstrainedPoint({ x: drag.sx, y: drag.sy }, pt);
       updateElement(drag.id, {
@@ -726,9 +715,6 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
   };
 
   const onMouseUp = () => {
-    if (drag?.kind === "draw-room") {
-      setMode("select");
-    }
     if (drag?.kind === "draw-wall") {
       setMode("select");
     }
@@ -826,7 +812,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
 
   const handleElClick = (e: MouseEvent<SVGGElement>, element: MapElement) => {
     e.stopPropagation();
-    if (isLockedObject(element.locked) && !e.altKey) return;
+    if (mode === "delete" && isLockedObject(element.locked) && !e.altKey) return;
     if (mode === "delete") {
       removeElement(element.id);
       return;
@@ -841,11 +827,12 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
 
   const handleDeviceMouseDown = (e: MouseEvent<SVGGElement>, device: Device) => {
     e.stopPropagation();
-    if (isLockedObject(device.locked) && !e.altKey) return;
+    if (mode === "delete" && isLockedObject(device.locked) && !e.altKey) return;
     if (mode === "delete") {
       removeDevice(device.id);
       return;
     }
+    select(device.id, "device");
     if (mode === "connector" && isEditMode) {
       const pt = toSvg(e.clientX, e.clientY);
       if (!draftCable) {
@@ -869,10 +856,8 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
             }
           : current,
       );
-      select(device.id, "device");
       return;
     }
-    select(device.id, "device");
     if (isEditMode && mode === "select") {
       if (isLockedObject(device.locked)) return;
       const pt = toSvg(e.clientX, e.clientY);
@@ -912,6 +897,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
             fillOpacity={isSel ? 0.3 : 0.15}
             stroke={color}
             strokeOpacity={0.4}
+            onMouseDown={(e) => handleDeviceMouseDown(e, device)}
           />
           {(isSel || isHl) && (
             <circle
@@ -925,12 +911,8 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
               pointerEvents="none"
             />
           )}
-          <g
-            onMouseDown={(e) => handleDeviceMouseDown(e, device)}
-            onMouseEnter={() => setHover(device)}
-            onMouseLeave={() => setHover(null)}
-            style={{ cursor: isEditMode ? "move" : "pointer" }}
-          >
+          <g onMouseEnter={() => setHover(device)} onMouseLeave={() => setHover(null)} style={{ cursor: isEditMode ? "move" : "pointer" }}>
+            <circle cx={device.x} cy={device.y} r={22} fill="transparent" onMouseDown={(e) => handleDeviceMouseDown(e, device)} />
             <circle
               cx={device.x}
               cy={device.y}
@@ -1015,12 +997,16 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
             pointerEvents="none"
           />
         )}
-        <g
-          onMouseDown={(e) => handleDeviceMouseDown(e, device)}
-          onMouseEnter={() => setHover(device)}
-          onMouseLeave={() => setHover(null)}
-          style={{ cursor: isEditMode ? "move" : "pointer" }}
-        >
+        <g onMouseEnter={() => setHover(device)} onMouseLeave={() => setHover(null)} style={{ cursor: isEditMode ? "move" : "pointer" }}>
+          <rect
+            x={device.x - size.width / 2 - 2}
+            y={device.y - size.height / 2 - 2}
+            width={size.width + 4}
+            height={size.height + 4}
+            rx={10}
+            fill="transparent"
+            onMouseDown={(e) => handleDeviceMouseDown(e, device)}
+          />
           <circle
             cx={device.x - size.width / 2 + 14}
             cy={device.y - size.height / 2 + 14}

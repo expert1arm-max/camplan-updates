@@ -113,7 +113,7 @@ export function PropertiesPanel() {
       onPresetColorChange={(color) => updateSettings({ roomColorPreset: color })}
       onDelete={() => removeElement(element.id)}
     />
-    );
+  );
 }
 
 function DevicePanel({
