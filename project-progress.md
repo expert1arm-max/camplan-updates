@@ -56,3 +56,5 @@
 - Object selection now opens the right properties panel; blank canvas clicks clear selection and close it unless the panel is pinned.
 - Left and right collapsed headers now show only the arrow when collapsed.
 - Right properties panel has a pin toggle that keeps it open after deselection.
+- Left and right menus now render as overlay drawers, so opening a panel does not shift the canvas.
+- The right properties panel was narrowed to keep more workspace visible.

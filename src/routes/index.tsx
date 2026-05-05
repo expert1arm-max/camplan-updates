@@ -78,40 +78,44 @@ function Index() {
   return (
     <div className="h-screen flex flex-col bg-background">
       <Toolbar search={search} setSearch={setSearch} />
-      <div className="flex-1 flex overflow-hidden relative">
-        <div className="flex h-full flex-col overflow-hidden">
-          <div className="border-r bg-card p-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className={`h-7 ${leftCollapsed ? "w-7 justify-center px-0" : "w-full justify-start"}`}
-              onClick={() => setLeftCollapsed((value) => !value)}
-            >
-              {leftCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4 mr-1" />}
-              {!leftCollapsed && "Скрыть левое меню"}
-            </Button>
-          </div>
-          {!leftCollapsed && <Sidebar />}
-        </div>
+      <div className="flex-1 relative overflow-hidden">
         <PlanCanvas highlightId={highlight} />
-        <div className="flex h-full flex-col overflow-hidden">
-          <div className="border-l bg-card p-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className={`h-7 ${rightCollapsed ? "w-7 justify-center px-0" : "w-full justify-start"}`}
-              onClick={() => setRightCollapsed((value) => !value)}
-            >
-              {rightCollapsed ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4 mr-1" />}
-              {!rightCollapsed && "Скрыть правое меню"}
-            </Button>
+
+        <div className="pointer-events-none absolute inset-0 z-20">
+          <div className="absolute left-0 top-0 h-full pointer-events-auto">
+            <div className="border-r bg-card/95 backdrop-blur-sm p-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className={`h-7 ${leftCollapsed ? "w-7 justify-center px-0" : "w-full justify-start"}`}
+                onClick={() => setLeftCollapsed((value) => !value)}
+              >
+                {leftCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4 mr-1" />}
+                {!leftCollapsed && "Скрыть левое меню"}
+              </Button>
+            </div>
+            {!leftCollapsed && <Sidebar />}
           </div>
-          {!rightCollapsed && (
-            <PropertiesPanel
-              rightPinned={rightPinned}
-              onToggleRightPin={() => setRightPinned((value) => !value)}
-            />
-          )}
+
+          <div className="absolute right-0 top-0 h-full pointer-events-auto">
+            <div className="border-l bg-card/95 backdrop-blur-sm p-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className={`h-7 ${rightCollapsed ? "w-7 justify-center px-0" : "w-full justify-start"}`}
+                onClick={() => setRightCollapsed((value) => !value)}
+              >
+                {rightCollapsed ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4 mr-1" />}
+                {!rightCollapsed && "Скрыть правое меню"}
+              </Button>
+            </div>
+            {!rightCollapsed && (
+              <PropertiesPanel
+                rightPinned={rightPinned}
+                onToggleRightPin={() => setRightPinned((value) => !value)}
+              />
+            )}
+          </div>
         </div>
 
         {results.length > 0 && (

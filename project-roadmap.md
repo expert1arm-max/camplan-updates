@@ -38,3 +38,5 @@ MVP desktop-версии собран и упаковывается.
 - Verify object selection opens the right panel and blank-canvas clicks close it.
 - Verify pin keeps the right panel open after deselection.
 - Verify collapsed left/right headers render arrow-only state.
+- Verify the new overlay drawer layout keeps the canvas stationary when the side panels open.
+- Verify the narrower right panel still supports device/object editing comfortably.

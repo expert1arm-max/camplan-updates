@@ -65,7 +65,7 @@ export function PropertiesPanel({
 
   if (!selectedId || !selectedKind) {
     return (
-      <aside className="w-80 border-l bg-card p-4 text-sm text-muted-foreground overflow-y-auto">
+      <aside className="w-72 border-l bg-card p-4 text-sm text-muted-foreground overflow-y-auto">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="font-semibold text-foreground">Выберите объект или устройство</div>
@@ -175,7 +175,7 @@ function ObjectPanel({
   const activeFloor = floors.find((floor) => floor.id === activeFloorId) ?? null;
 
   return (
-    <aside className="w-80 border-l bg-card overflow-y-auto">
+    <aside className="w-72 border-l bg-card overflow-y-auto">
       <div className="p-3 border-b flex items-center justify-between">
         <div className="font-semibold text-sm flex items-center gap-2 truncate">
           <span>Выбран: Объект — {object.name}</span>
@@ -276,7 +276,7 @@ function DevicePanel({
   };
 
   return (
-    <aside className="w-80 border-l bg-card overflow-y-auto">
+    <aside className="w-72 border-l bg-card overflow-y-auto">
       <div className="p-3 border-b sticky top-0 bg-card flex items-center justify-between gap-2 z-10">
         <div className="font-semibold text-sm truncate flex items-center gap-2">
           <span>Выбран: {device.name || "Устройство"}</span>
@@ -783,7 +783,7 @@ function ConnectionPanel({
   })();
 
   return (
-    <aside className="w-80 border-l bg-card overflow-y-auto">
+    <aside className="w-72 border-l bg-card overflow-y-auto">
       <div className="p-3 border-b flex items-center justify-between gap-2">
         <div className="font-semibold text-sm flex items-center gap-2">
           <span>Выбран: Кабель</span>

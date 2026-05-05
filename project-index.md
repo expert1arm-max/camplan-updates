@@ -26,3 +26,5 @@ Desktop-приложение `CCTV Manager` для Windows на базе React/V
 - Project save/open and image export now live under a File dropdown; panel collapse controls are above the left and right menus.
 
 - Object clicks in the sidebar now select the object and open the right panel; the right panel can be pinned open and collapses on blank-canvas deselection when not pinned.
+- Left and right menus now render as overlay drawers, so opening the right panel does not shift the map.
+- The right properties drawer is intentionally narrower than before to keep more of the canvas visible.
