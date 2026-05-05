@@ -22,6 +22,7 @@ export function PropertiesPanel() {
     selectedId,
     selectedKind,
     isEditMode,
+    setEditMode,
     cameras,
     mapElements,
     updateCamera,
@@ -53,6 +54,7 @@ export function PropertiesPanel() {
       <CameraPanel
         cam={camera}
         canEdit={isEditMode}
+        onEnterEditMode={() => setEditMode(true)}
         onUpdate={(patch) => updateCamera(camera.id, patch)}
         onDelete={() => removeCamera(camera.id)}
         onDup={() => duplicateCamera(camera.id)}
@@ -66,6 +68,7 @@ export function PropertiesPanel() {
     <ElementPanel
       el={element}
       canEdit={isEditMode}
+      onEnterEditMode={() => setEditMode(true)}
       onUpdate={(patch) => updateElement(element.id, patch)}
       onDelete={() => removeElement(element.id)}
     />
@@ -75,12 +78,14 @@ export function PropertiesPanel() {
 function CameraPanel({
   cam,
   canEdit,
+  onEnterEditMode,
   onUpdate,
   onDelete,
   onDup,
 }: {
   cam: Camera;
   canEdit: boolean;
+  onEnterEditMode: () => void;
   onUpdate: (p: Partial<Camera>) => void;
   onDelete: () => void;
   onDup: () => void;
@@ -115,6 +120,17 @@ function CameraPanel({
           </div>
         )}
       </div>
+
+      {!canEdit && (
+        <div className="px-3 pt-3">
+          <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground flex items-center justify-between gap-2">
+            <span>Пароль и другие поля можно менять в режиме редактирования.</span>
+            <Button size="sm" variant="outline" className="h-7" onClick={onEnterEditMode}>
+              Редактировать
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="p-3 space-y-3 text-xs">
         <Field label="Название">
@@ -324,11 +340,13 @@ function CameraPanel({
 function ElementPanel({
   el,
   canEdit,
+  onEnterEditMode,
   onUpdate,
   onDelete,
 }: {
   el: MapElement;
   canEdit: boolean;
+  onEnterEditMode: () => void;
   onUpdate: (p: Partial<MapElement>) => void;
   onDelete: () => void;
 }) {
@@ -342,6 +360,16 @@ function ElementPanel({
           </Button>
         )}
       </div>
+      {!canEdit && (
+        <div className="px-3 pt-3">
+          <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground flex items-center justify-between gap-2">
+            <span>Редактирование элемента доступно только в режиме редактирования.</span>
+            <Button size="sm" variant="outline" className="h-7" onClick={onEnterEditMode}>
+              Редактировать
+            </Button>
+          </div>
+        </div>
+      )}
       <div className="p-3 space-y-3 text-xs">
         {(el.type === "room" || el.type === "text") && (
           <Field label="Подпись">
