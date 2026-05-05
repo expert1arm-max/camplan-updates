@@ -46,3 +46,6 @@
 - `npm run lint` проходит без ошибок, остаются только предупреждения из базовых UI-файлов.
 - `npm run dist:win` собирает Windows installer.
 - `npm run dist:portable` собирает single-file portable `.exe`.
+
+- UI now has collapsible left and right panels.
+- Toolbar exports/imports the map as a project JSON and supports JPG export of the plan.

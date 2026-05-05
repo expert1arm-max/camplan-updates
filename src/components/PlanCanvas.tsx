@@ -1059,6 +1059,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
 
       <svg
         ref={svgRef}
+        id="plan-canvas-svg"
         className="w-full h-full select-none"
         viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
         onWheel={onWheel}
@@ -1090,7 +1091,14 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
             <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#cbd5e1" strokeWidth="1" />
           </pattern>
         </defs>
-        <rect x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="url(#grid-lg)" />
+        <rect
+          x={vb.x}
+          y={vb.y}
+          width={vb.w}
+          height={vb.h}
+          fill="url(#grid-lg)"
+          pointerEvents="none"
+        />
 
 
         {floorEls.map((element) => {

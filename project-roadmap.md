@@ -28,3 +28,6 @@ MVP desktop-версии собран и упаковывается.
   - undo/redo через `Ctrl+Z`, `Ctrl+Shift+Z`, `Ctrl+Y`
   - copy/paste через `Ctrl+C`, `Ctrl+V`
   - старт в `Просмотр` и переключение в `Редактирование`
+
+- Verify project save/load and JPG export in Electron.
+- Verify left/right panel collapse and restore on relaunch.

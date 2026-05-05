@@ -5,6 +5,8 @@ import {
   Download,
   DoorOpen,
   Eye,
+  ChevronLeft,
+  ChevronRight,
   Link2,
   Network,
   Pencil,
@@ -16,7 +18,6 @@ import {
   Trash2,
   Upload,
   Wifi,
-  RotateCcw,
   Table2,
   Zap,
 } from "lucide-react";
@@ -43,6 +44,11 @@ declare global {
         content: string;
         filters: { name: string; extensions: string[] }[];
       }) => Promise<boolean>;
+      saveBinaryFile: (payload: {
+        defaultPath: string;
+        dataUrl: string;
+        filters: { name: string; extensions: string[] }[];
+      }) => Promise<boolean>;
     };
   }
 }
@@ -62,7 +68,21 @@ const tools: { mode: EditorMode; icon: typeof Square; label: string }[] = [
   { mode: "delete", icon: Trash2, label: "Удалить" },
 ];
 
-export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: string) => void }) {
+export function Toolbar({
+  search,
+  setSearch,
+  leftCollapsed,
+  rightCollapsed,
+  onToggleLeft,
+  onToggleRight,
+}: {
+  search: string;
+  setSearch: (s: string) => void;
+  leftCollapsed: boolean;
+  rightCollapsed: boolean;
+  onToggleLeft: () => void;
+  onToggleRight: () => void;
+}) {
   const {
     mode,
     isEditMode,
@@ -72,7 +92,6 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
     setMode,
     exportJSON,
     importJSON,
-    resetDemo,
     savedAt,
   } = useStore();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -108,6 +127,63 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
     const { devices, floors, objects } = useStore.getState();
     const csv = buildDeviceCsv(devices, floors, objects);
     await saveFile(`cctv-devices-${Date.now()}.csv`, csv, [{ name: "CSV", extensions: ["csv"] }]);
+  };
+
+  const handleExportJpg = async () => {
+    const svg = document.getElementById("plan-canvas-svg") as SVGSVGElement | null;
+    if (!svg) return;
+
+    const rect = svg.getBoundingClientRect();
+    const width = Math.max(1200, Math.round(svg.viewBox.baseVal.width || rect.width || 1200));
+    const height = Math.max(800, Math.round(svg.viewBox.baseVal.height || rect.height || 800));
+
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.setAttribute("width", String(width));
+    clone.setAttribute("height", String(height));
+
+    const svgData = new XMLSerializer().serializeToString(clone);
+    const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            reject(new Error("Canvas context unavailable"));
+            return;
+          }
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", 0.95));
+        };
+        img.onerror = () => reject(new Error("Failed to render SVG"));
+        img.src = url;
+      });
+
+      const bridge = window.cctvDesktop;
+      if (bridge) {
+        await bridge.saveBinaryFile({
+          defaultPath: `cctv-map-${Date.now()}.jpg`,
+          dataUrl,
+          filters: [{ name: "JPEG", extensions: ["jpg", "jpeg"] }],
+        });
+        return;
+      }
+
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = `cctv-map-${Date.now()}.jpg`;
+      a.click();
+    } finally {
+      URL.revokeObjectURL(url);
+    }
   };
 
   const handleImport = async () => {
@@ -199,6 +275,26 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
         />
       </div>
 
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onToggleLeft}
+        title={leftCollapsed ? "Показать левое меню" : "Скрыть левое меню"}
+      >
+        {leftCollapsed ? <ChevronRight className="h-4 w-4 mr-1" /> : <ChevronLeft className="h-4 w-4 mr-1" />}
+        Левое меню
+      </Button>
+
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onToggleRight}
+        title={rightCollapsed ? "Показать правое меню" : "Скрыть правое меню"}
+      >
+        {rightCollapsed ? <ChevronLeft className="h-4 w-4 mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
+        Правое меню
+      </Button>
+
       <Link to="/cameras">
         <Button variant="outline" size="sm">
           <Table2 className="h-4 w-4 mr-1" /> Все устройства
@@ -226,15 +322,19 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
       </Button>
 
       <Button variant="outline" size="sm" onClick={handleExportJson}>
-        <Download className="h-4 w-4 mr-1" /> JSON
+        <Download className="h-4 w-4 mr-1" /> Проект
       </Button>
 
       <Button variant="outline" size="sm" onClick={handleExportCsv}>
         <Download className="h-4 w-4 mr-1" /> CSV
       </Button>
 
+      <Button variant="outline" size="sm" onClick={handleExportJpg}>
+        JPG
+      </Button>
+
       <Button variant="outline" size="sm" onClick={handleImport}>
-        <Upload className="h-4 w-4 mr-1" /> Импорт
+        <Upload className="h-4 w-4 mr-1" /> Открыть проект
       </Button>
       <input
         ref={fileRef}
@@ -254,15 +354,6 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
           e.target.value = "";
         }}
       />
-
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => confirm("Сбросить к демо-данным?") && resetDemo()}
-      >
-        <RotateCcw className="h-4 w-4" />
-      </Button>
-
       <span className="text-xs text-muted-foreground ml-auto hidden lg:inline">
         Автосохранение • {new Date(savedAt).toLocaleTimeString()}
       </span>

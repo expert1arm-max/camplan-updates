@@ -22,6 +22,8 @@ export const Route = createFileRoute("/")({
 function Index() {
   const [search, setSearch] = useState("");
   const [highlight, setHighlight] = useState<string | null>(null);
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
   const { devices, floors, objects, focusDevice } = useStore();
 
   const results = useMemo(() => {
@@ -60,11 +62,18 @@ function Index() {
 
   return (
     <div className="h-screen flex flex-col bg-background">
-      <Toolbar search={search} setSearch={setSearch} />
+      <Toolbar
+        search={search}
+        setSearch={setSearch}
+        leftCollapsed={leftCollapsed}
+        rightCollapsed={rightCollapsed}
+        onToggleLeft={() => setLeftCollapsed((value) => !value)}
+        onToggleRight={() => setRightCollapsed((value) => !value)}
+      />
       <div className="flex-1 flex overflow-hidden relative">
-        <Sidebar />
+        {!leftCollapsed && <Sidebar />}
         <PlanCanvas highlightId={highlight} />
-        <PropertiesPanel />
+        {!rightCollapsed && <PropertiesPanel />}
 
         {results.length > 0 && (
           <div className="absolute top-2 left-1/2 -translate-x-1/2 w-[460px] bg-card border rounded-md shadow-lg z-20 max-h-80 overflow-y-auto">

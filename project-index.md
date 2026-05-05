@@ -20,3 +20,5 @@ Desktop-приложение `CCTV Manager` для Windows на базе React/V
 - Таблица всех устройств.
 - Кабельные связи между устройствами на плане.
 - Правая панель свойств устройства или элемента плана.
+
+- Toolbar now supports project JSON save/load, JPG export, and panel collapse toggles.

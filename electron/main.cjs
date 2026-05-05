@@ -141,6 +141,23 @@ app.whenReady().then(() => {
     return true;
   });
 
+  ipcMain.handle("dialog:save-binary", async (_event, payload) => {
+    const result = await dialog.showSaveDialog({
+      defaultPath: payload?.defaultPath ?? "export.jpg",
+      filters: payload?.filters ?? [{ name: "JPEG", extensions: ["jpg", "jpeg"] }],
+    });
+
+    if (result.canceled || !result.filePath) {
+      return false;
+    }
+
+    const dataUrl = String(payload?.dataUrl ?? "");
+    const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : "";
+    if (!base64) return false;
+    await fs.writeFile(result.filePath, Buffer.from(base64, "base64"));
+    return true;
+  });
+
   void createWindow();
 
   app.on("activate", () => {
