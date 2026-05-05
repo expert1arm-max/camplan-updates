@@ -29,4 +29,4 @@
 - `npm run build` проходит.
 - `npm run lint` проходит без ошибок, остаются только предупреждения из базовых UI-файлов.
 - `npm run dist:win` собирает Windows installer.
-
+- `npm run dist:portable` собирает single-file portable `.exe`.

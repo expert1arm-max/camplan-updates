@@ -20,7 +20,12 @@ npm run build
 npm run dist:win
 ```
 
+## Portable EXE
+```bash
+npm run dist:portable
+```
+
 ## Output
 - Frontend build goes to `dist/`.
 - Electron packaging output goes to `release/`.
-
+- Portable build outputs a single `.exe` in `release/`.
