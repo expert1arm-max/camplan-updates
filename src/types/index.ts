@@ -4,12 +4,32 @@ export type CameraStatus = DeviceStatus;
 
 export type DeviceType = "camera" | "nvr" | "dvr" | "switch" | "poe_switch";
 
+export type CableType = "utp" | "ftp" | "coaxial" | "power";
+
+export type CableAnchor = "top" | "right" | "bottom" | "left" | "center";
+
+export interface CablePoint {
+  x: number;
+  y: number;
+}
+
+export interface CableEndpoint {
+  deviceId?: string;
+  anchor?: CableAnchor;
+  x: number;
+  y: number;
+}
+
 export interface DeviceConnection {
   id: string;
-  fromDeviceId: string;
-  toDeviceId: string;
-  connectionType: "network" | "poe" | "video" | "uplink";
+  objectId: string;
+  floorId: string;
+  type: CableType;
+  from: CableEndpoint;
+  to: CableEndpoint;
+  points: CablePoint[];
   label?: string;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -114,4 +134,5 @@ export type EditorMode =
   | "dvr"
   | "switch"
   | "poe_switch"
+  | "connector"
   | "delete";

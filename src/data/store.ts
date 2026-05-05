@@ -4,6 +4,9 @@ import type {
   AppData,
   AppSettings,
   Camera,
+  CableAnchor,
+  CablePoint,
+  CableType,
   Device,
   DeviceConnection,
   DeviceStatus,
@@ -20,9 +23,10 @@ interface State extends AppData {
   activeObjectId: string | null;
   activeFloorId: string | null;
   selectedId: string | null;
-  selectedKind: "device" | "element" | null;
+  selectedKind: "device" | "element" | "connection" | null;
   mode: EditorMode;
   isEditMode: boolean;
+  currentCableType: CableType;
   savedAt: number;
   isHydrated: boolean;
   history: EditorSnapshot[];
@@ -36,7 +40,9 @@ interface State extends AppData {
   focusElement: (id: string) => void;
   setEditMode: (enabled: boolean) => void;
   setMode: (m: EditorMode) => void;
-  select: (id: string | null, kind: "device" | "element" | null) => void;
+  setCableType: (type: CableType) => void;
+  select: (id: string | null, kind: "device" | "element" | "connection" | null) => void;
+  focusConnection: (id: string) => void;
 
   addObject: (name: string) => void;
   renameObject: (id: string, name: string, description?: string) => void;
@@ -61,10 +67,11 @@ interface State extends AppData {
   duplicateCamera: (id: string) => void;
 
   addDeviceConnection: (connection: Omit<DeviceConnection, "id" | "createdAt" | "updatedAt">) => void;
+  updateDeviceConnection: (id: string, patch: Partial<DeviceConnection>) => void;
   toggleDeviceConnection: (
     fromDeviceId: string,
     toDeviceId: string,
-    connectionType: DeviceConnection["connectionType"],
+    cableType?: CableType,
   ) => void;
   removeDeviceConnection: (id: string) => void;
 
@@ -83,7 +90,7 @@ type EditorSnapshot = AppData & {
   activeObjectId: string | null;
   activeFloorId: string | null;
   selectedId: string | null;
-  selectedKind: "device" | "element" | null;
+  selectedKind: "device" | "element" | "connection" | null;
   mode: EditorMode;
   isEditMode: boolean;
 };
@@ -239,6 +246,18 @@ function cloneElementRecord(element: MapElement, patch: Partial<MapElement> = {}
   });
 }
 
+function cloneConnectionRecord(
+  connection: DeviceConnection,
+  patch: Partial<DeviceConnection> = {},
+): DeviceConnection {
+  const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...base } = connection;
+  return {
+    ...base,
+    ...patch,
+    points: patch.points ?? connection.points.map((point) => ({ ...point })),
+  };
+}
+
 function ensureObjectPlacement(devices: Device[], floors: Floor[], device: Device) {
   if (device.objectId) return device;
   const floor = floors.find((item) => item.id === device.floorId) ?? null;
@@ -248,13 +267,37 @@ function ensureObjectPlacement(devices: Device[], floors: Floor[], device: Devic
   };
 }
 
-function removeConnectionsForDevice(
-  deviceConnections: DeviceConnection[],
-  deviceId: string,
-) {
+function removeConnectionsForDevice(deviceConnections: DeviceConnection[], deviceId: string) {
   return deviceConnections.filter(
-    (connection) => connection.fromDeviceId !== deviceId && connection.toDeviceId !== deviceId,
+    (connection) =>
+      connection.from.deviceId !== deviceId && connection.to.deviceId !== deviceId,
   );
+}
+
+function getAnchorPoint(
+  device: Device,
+  anchor: CableAnchor = "center",
+): { x: number; y: number } {
+  if (device.type === "camera") {
+    return { x: device.x, y: device.y };
+  }
+
+  const width = device.type === "nvr" || device.type === "dvr" ? 64 : 72;
+  const height = device.type === "nvr" || device.type === "dvr" ? 36 : 30;
+  const halfW = width / 2;
+  const halfH = height / 2;
+  switch (anchor) {
+    case "top":
+      return { x: device.x, y: device.y - halfH };
+    case "right":
+      return { x: device.x + halfW, y: device.y };
+    case "bottom":
+      return { x: device.x, y: device.y + halfH };
+    case "left":
+      return { x: device.x - halfW, y: device.y };
+    default:
+      return { x: device.x, y: device.y };
+  }
 }
 
 const initial = createDemoData();
@@ -275,6 +318,7 @@ export const useStore = create<State>()((set, get) => ({
   selectedKind: null,
   mode: "select",
   isEditMode: false,
+  currentCableType: "utp",
   savedAt: Date.now(),
   isHydrated: false,
   history: [],
@@ -290,6 +334,7 @@ export const useStore = create<State>()((set, get) => ({
       selectedKind: null,
       mode: "select",
       isEditMode: false,
+      currentCableType: "utp",
       savedAt: Date.now(),
       isHydrated: true,
       history: [],
@@ -336,6 +381,24 @@ export const useStore = create<State>()((set, get) => ({
 
   focusCamera: (id) => get().focusDevice(id),
 
+  focusConnection: (id) =>
+    set((state) => {
+      const connection = state.deviceConnections.find((item) => item.id === id) ?? null;
+      if (!connection) return state;
+      const device =
+        state.devices.find((item) => item.id === connection.from.deviceId) ??
+        state.devices.find((item) => item.id === connection.to.deviceId) ??
+        null;
+      const floor = device ? state.floors.find((item) => item.id === device.floorId) ?? null : null;
+      return {
+        activeFloorId: floor?.id ?? state.activeFloorId,
+        activeObjectId: floor?.objectId ?? state.activeObjectId,
+        selectedId: connection.id,
+        selectedKind: "connection",
+        mode: "select",
+      };
+    }),
+
   focusElement: (id) =>
     set((state) => {
       const element = state.mapElements.find((item) => item.id === id) ?? null;
@@ -357,6 +420,7 @@ export const useStore = create<State>()((set, get) => ({
     })),
 
   setMode: (m) => set({ mode: m }),
+  setCableType: (type) => set({ currentCableType: type }),
   select: (id, kind) => set({ selectedId: id, selectedKind: kind }),
 
   addObject: (name) => {
@@ -394,8 +458,8 @@ export const useStore = create<State>()((set, get) => ({
       const remainingDeviceIds = new Set(remainingDevices.map((device) => device.id));
       const remainingConnections = state.deviceConnections.filter(
         (connection) =>
-          remainingDeviceIds.has(connection.fromDeviceId) &&
-          remainingDeviceIds.has(connection.toDeviceId),
+          remainingDeviceIds.has(connection.from.deviceId ?? "") &&
+          remainingDeviceIds.has(connection.to.deviceId ?? ""),
       );
       const nextObject = remainingObjects[0] ?? null;
       const nextFloor = nextObject
@@ -452,8 +516,7 @@ export const useStore = create<State>()((set, get) => ({
       const devices = state.devices.filter((device) => device.floorId !== id);
       const deviceIds = new Set(devices.map((device) => device.id));
       const deviceConnections = state.deviceConnections.filter(
-        (connection) =>
-          deviceIds.has(connection.fromDeviceId) && deviceIds.has(connection.toDeviceId),
+        (connection) => deviceIds.has(connection.from.deviceId ?? "") && deviceIds.has(connection.to.deviceId ?? ""),
       );
       const mapElements = state.mapElements.filter((element) => element.floorId !== id);
       const nextFloor =
@@ -561,11 +624,26 @@ export const useStore = create<State>()((set, get) => ({
     }));
   },
 
-  toggleDeviceConnection: (fromDeviceId, toDeviceId, connectionType) => {
+  updateDeviceConnection: (id, patch) => {
+    mutate(set, get, (state) => ({
+      deviceConnections: state.deviceConnections.map((connection) =>
+        connection.id === id
+          ? {
+              ...connection,
+              ...patch,
+              points: patch.points ? patch.points.map((point) => ({ ...point })) : connection.points,
+              updatedAt: timestamp(),
+            }
+          : connection,
+      ),
+    }));
+  },
+
+  toggleDeviceConnection: (fromDeviceId, toDeviceId, cableType = "utp") => {
     mutate(set, get, (state) => {
       const existing = state.deviceConnections.find(
         (connection) =>
-          connection.fromDeviceId === fromDeviceId && connection.toDeviceId === toDeviceId,
+          connection.from.deviceId === fromDeviceId && connection.to.deviceId === toDeviceId,
       );
       if (existing) {
         return {
@@ -573,14 +651,35 @@ export const useStore = create<State>()((set, get) => ({
         };
       }
 
+      const fromDevice = state.devices.find((item) => item.id === fromDeviceId) ?? null;
+      const toDevice = state.devices.find((item) => item.id === toDeviceId) ?? null;
+      if (!fromDevice || !toDevice) return {};
+      const fromAnchor = getAnchorPoint(fromDevice, "right");
+      const toAnchor = getAnchorPoint(toDevice, "left");
+
       return {
         deviceConnections: [
           ...state.deviceConnections,
           {
             id: nanoid(),
-            fromDeviceId,
-            toDeviceId,
-            connectionType,
+            objectId: fromDevice.objectId || toDevice.objectId,
+            floorId: fromDevice.floorId || toDevice.floorId,
+            type: cableType,
+            from: {
+              deviceId: fromDeviceId,
+              anchor: "right",
+              x: fromAnchor.x,
+              y: fromAnchor.y,
+            },
+            to: {
+              deviceId: toDeviceId,
+              anchor: "left",
+              x: toAnchor.x,
+              y: toAnchor.y,
+            },
+            points: [],
+            label: cableType.toUpperCase(),
+            notes: "",
             createdAt: timestamp(),
             updatedAt: timestamp(),
           },
@@ -592,6 +691,8 @@ export const useStore = create<State>()((set, get) => ({
   removeDeviceConnection: (id) => {
     mutate(set, get, (state) => ({
       deviceConnections: state.deviceConnections.filter((connection) => connection.id !== id),
+      selectedId: state.selectedId === id ? null : state.selectedId,
+      selectedKind: state.selectedId === id ? null : state.selectedKind,
     }));
   },
 

@@ -5,6 +5,7 @@ import {
   Download,
   DoorOpen,
   Eye,
+  Link2,
   Network,
   Pencil,
   Minus,
@@ -21,9 +22,16 @@ import {
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { useStore, deviceTypeLabels } from "@/data/store";
-import type { DeviceType, EditorMode } from "@/types";
+import type { CableType, DeviceType, EditorMode } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 declare global {
@@ -45,6 +53,7 @@ const tools: { mode: EditorMode; icon: typeof Square; label: string }[] = [
   { mode: "wall", icon: Minus, label: "Стена" },
   { mode: "door", icon: DoorOpen, label: "Дверь" },
   { mode: "text", icon: Type, label: "Текст" },
+  { mode: "connector", icon: Link2, label: "Кабель" },
   { mode: "camera", icon: Camera, label: "Камера" },
   { mode: "nvr", icon: Server, label: "NVR" },
   { mode: "dvr", icon: Network, label: "DVR" },
@@ -54,8 +63,18 @@ const tools: { mode: EditorMode; icon: typeof Square; label: string }[] = [
 ];
 
 export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: string) => void }) {
-  const { mode, isEditMode, setEditMode, setMode, exportJSON, importJSON, resetDemo, savedAt } =
-    useStore();
+  const {
+    mode,
+    isEditMode,
+    currentCableType,
+    setCableType,
+    setEditMode,
+    setMode,
+    exportJSON,
+    importJSON,
+    resetDemo,
+    savedAt,
+  } = useStore();
   const fileRef = useRef<HTMLInputElement>(null);
   const [savedFlash, setSavedFlash] = useState(false);
 
@@ -154,6 +173,20 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
             </button>
           ))}
         </div>
+      )}
+
+      {isEditMode && mode === "connector" && (
+        <Select value={currentCableType} onValueChange={(value) => setCableType(value as CableType)}>
+          <SelectTrigger className="h-9 w-36">
+            <SelectValue placeholder="Тип кабеля" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="utp">UTP</SelectItem>
+            <SelectItem value="ftp">FTP</SelectItem>
+            <SelectItem value="coaxial">Coaxial</SelectItem>
+            <SelectItem value="power">Power</SelectItem>
+          </SelectContent>
+        </Select>
       )}
 
       <div className="flex-1 max-w-md relative">

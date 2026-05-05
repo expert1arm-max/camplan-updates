@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Copy, Eye, EyeOff, Files, Link2, Trash2 } from "lucide-react";
+import { Copy, Eye, EyeOff, Files, Trash2 } from "lucide-react";
 import { deviceTypeLabels, statusLabels, useStore } from "@/data/store";
-import type { Device, DeviceConnection, DeviceStatus, DeviceType, MapElement } from "@/types";
+import type { CableType, Device, DeviceConnection, DeviceStatus, DeviceType, MapElement } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +17,12 @@ import { Slider } from "@/components/ui/slider";
 
 const statuses: DeviceStatus[] = ["working", "offline", "needs_check", "reserve", "no_access"];
 const deviceTypes: DeviceType[] = ["camera", "nvr", "dvr", "switch", "poe_switch"];
+const cableLabels: Record<CableType, string> = {
+  utp: "UTP",
+  ftp: "FTP",
+  coaxial: "Coaxial",
+  power: "Power",
+};
 
 export function PropertiesPanel() {
   const {
@@ -28,9 +34,11 @@ export function PropertiesPanel() {
     mapElements,
     deviceConnections,
     updateDevice,
+    updateDeviceConnection,
     updateElement,
     removeDevice,
     duplicateDevice,
+    removeDeviceConnection,
     removeElement,
     toggleDeviceConnection,
   } = useStore();
@@ -70,6 +78,21 @@ export function PropertiesPanel() {
     );
   }
 
+  if (selectedKind === "connection") {
+    const connection = deviceConnections.find((item) => item.id === selectedId);
+    if (!connection) return null;
+    return (
+      <ConnectionPanel
+        connection={connection}
+        canEdit={isEditMode}
+        devices={devices}
+        onEnterEditMode={() => setEditMode(true)}
+        onUpdate={(patch) => updateDeviceConnection(connection.id, patch)}
+        onDelete={() => removeDeviceConnection(connection.id)}
+      />
+    );
+  }
+
   const element = mapElements.find((item) => item.id === selectedId);
   if (!element) return null;
   return (
@@ -104,7 +127,7 @@ function DevicePanel({
   onDup: () => void;
   onToggleConnection: (
     toDeviceId: string,
-    connectionType: DeviceConnection["connectionType"],
+    cableType: CableType,
   ) => void;
 }) {
   const [showPwd, setShowPwd] = useState(false);
@@ -112,10 +135,10 @@ function DevicePanel({
   const related = useMemo(
     () =>
       connections
-        .filter((connection) => connection.fromDeviceId === device.id)
+        .filter((connection) => connection.from.deviceId === device.id)
         .map((connection) => ({
           connection,
-          target: devices.find((item) => item.id === connection.toDeviceId) ?? null,
+          target: devices.find((item) => item.id === connection.to.deviceId) ?? null,
         }))
         .filter((item) => item.target),
     [connections, device.id, devices],
@@ -126,11 +149,11 @@ function DevicePanel({
     [device.id, device.objectId, devices],
   );
 
-  const connectionTypeForTarget = (target: Device) => {
-    if (device.type === "poe_switch") return target.type === "camera" ? "poe" : "uplink";
-    if (device.type === "switch") return "network";
-    if (device.type === "nvr" || device.type === "dvr") return "video";
-    return "network";
+  const connectionTypeForTarget = (target: Device): CableType => {
+    if (device.type === "poe_switch") return target.type === "camera" ? "power" : "utp";
+    if (device.type === "switch") return "utp";
+    if (device.type === "nvr" || device.type === "dvr") return target.type === "camera" ? "coaxial" : "utp";
+    return "utp";
   };
 
   return (
@@ -530,9 +553,9 @@ function ConnectionList({
   related: { connection: DeviceConnection; target: Device }[];
   onToggleConnection: (
     toDeviceId: string,
-    connectionType: DeviceConnection["connectionType"],
+    cableType: CableType,
   ) => void;
-  connectionTypeResolver: (target: Device) => DeviceConnection["connectionType"];
+  connectionTypeResolver: (target: Device) => CableType;
 }) {
   return (
     <div className="space-y-2">
@@ -562,12 +585,136 @@ function ConnectionList({
         <div className="text-[11px] text-muted-foreground space-y-1">
           {related.map(({ target, connection }) => (
             <div key={connection.id}>
-              {target.name} • {connection.connectionType}
+              {target.name} • {cableLabels[connection.type]}
             </div>
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+function ConnectionPanel({
+  connection,
+  canEdit,
+  devices,
+  onEnterEditMode,
+  onUpdate,
+  onDelete,
+}: {
+  connection: DeviceConnection;
+  canEdit: boolean;
+  devices: Device[];
+  onEnterEditMode: () => void;
+  onUpdate: (p: Partial<DeviceConnection>) => void;
+  onDelete: () => void;
+}) {
+  const fromName = devices.find((item) => item.id === connection.from.deviceId)?.name ?? "Точка A";
+  const toName = devices.find((item) => item.id === connection.to.deviceId)?.name ?? "Точка B";
+  const approxLength = (() => {
+    const resolve = (endpoint: DeviceConnection["from"] | DeviceConnection["to"]) => {
+      const device = endpoint.deviceId ? devices.find((item) => item.id === endpoint.deviceId) : null;
+      if (!device) return { x: endpoint.x, y: endpoint.y };
+      if (device.type === "camera") return { x: device.x, y: device.y };
+      const size = device.type === "nvr" || device.type === "dvr" ? { width: 64, height: 36 } : { width: 72, height: 30 };
+      const halfW = size.width / 2;
+      const halfH = size.height / 2;
+      switch (endpoint.anchor) {
+        case "top":
+          return { x: device.x, y: device.y - halfH };
+        case "right":
+          return { x: device.x + halfW, y: device.y };
+        case "bottom":
+          return { x: device.x, y: device.y + halfH };
+        case "left":
+          return { x: device.x - halfW, y: device.y };
+        default:
+          return { x: device.x, y: device.y };
+      }
+    };
+    const points = [resolve(connection.from), ...connection.points, resolve(connection.to)];
+    return points.slice(1).reduce((sum, point, index) => {
+      const prev = points[index];
+      return sum + Math.hypot(point.x - prev.x, point.y - prev.y);
+    }, 0).toFixed(1);
+  })();
+
+  return (
+    <aside className="w-80 border-l bg-card overflow-y-auto">
+      <div className="p-3 border-b flex items-center justify-between">
+        <div className="font-semibold text-sm">Кабель</div>
+        {canEdit && (
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onDelete}>
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        )}
+      </div>
+      {!canEdit && (
+        <div className="px-3 pt-3">
+          <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground flex items-center justify-between gap-2">
+            <span>Кабель доступен только в режиме редактирования.</span>
+            <Button size="sm" variant="outline" className="h-7" onClick={onEnterEditMode}>
+              Редактировать
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className="p-3 space-y-3 text-xs">
+        <Field label="Тип кабеля">
+          <Select
+            value={connection.type}
+            onValueChange={(value) => onUpdate({ type: value as CableType })}
+            disabled={!canEdit}
+          >
+            <SelectTrigger className="h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(cableLabels) as CableType[]).map((type) => (
+                <SelectItem key={type} value={type}>
+                  {cableLabels[type]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+
+        <Field label="От устройства">
+          <Input value={fromName} className="h-8" disabled readOnly />
+        </Field>
+
+        <Field label="До устройства">
+          <Input value={toName} className="h-8" disabled readOnly />
+        </Field>
+
+        <Field label="Label">
+          <Input
+            value={connection.label ?? ""}
+            onChange={(e) => onUpdate({ label: e.target.value })}
+            className="h-8"
+            disabled={!canEdit}
+          />
+        </Field>
+
+        <Field label="Notes">
+          <Textarea
+            value={connection.notes ?? ""}
+            onChange={(e) => onUpdate({ notes: e.target.value })}
+            rows={3}
+            disabled={!canEdit}
+          />
+        </Field>
+
+        <Field label="Точек маршрута">
+          <Input value={connection.points.length} className="h-8" disabled readOnly />
+        </Field>
+
+        <Field label="Условная длина">
+          <Input value={approxLength} className="h-8" disabled readOnly />
+        </Field>
+      </div>
+    </aside>
   );
 }
 

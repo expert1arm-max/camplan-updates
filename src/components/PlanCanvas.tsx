@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent, type WheelEvent } from "react";
 import { deviceTypeLabels, statusColors, useStore } from "@/data/store";
-import type { Device, DeviceConnection, DeviceType, MapElement } from "@/types";
+import type { CableAnchor, CablePoint, CableType, Device, DeviceConnection, DeviceType, MapElement } from "@/types";
 
 interface ViewBox {
   x: number;
@@ -11,6 +11,8 @@ interface ViewBox {
 
 const BASE_W = 1400;
 const BASE_H = 900;
+const GRID_SIZE = 20;
+const DEVICE_SNAP_DISTANCE = 24;
 
 const deviceSizes: Record<DeviceType, { width: number; height: number }> = {
   camera: { width: 24, height: 24 },
@@ -19,6 +21,75 @@ const deviceSizes: Record<DeviceType, { width: number; height: number }> = {
   switch: { width: 72, height: 30 },
   poe_switch: { width: 72, height: 30 },
 };
+
+const cableLabels: Record<CableType, string> = {
+  utp: "UTP",
+  ftp: "FTP",
+  coaxial: "Coaxial",
+  power: "Power",
+};
+
+const cableStyles: Record<CableType, { stroke: string; dash?: string; width: number }> = {
+  utp: { stroke: "#334155", width: 2 },
+  ftp: { stroke: "#1d4ed8", dash: "6 3", width: 2 },
+  coaxial: { stroke: "#6b21a8", width: 3.5 },
+  power: { stroke: "#b45309", dash: "2 2", width: 3 },
+};
+
+function snapGrid(value: number) {
+  return Math.round(value / GRID_SIZE) * GRID_SIZE;
+}
+
+function distance(a: { x: number; y: number }, b: { x: number; y: number }) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function getDeviceRect(device: Device) {
+  if (device.type === "camera") {
+    return { x: device.x - 12, y: device.y - 12, width: 24, height: 24 };
+  }
+  const size = deviceSizes[device.type];
+  return {
+    x: device.x - size.width / 2,
+    y: device.y - size.height / 2,
+    width: size.width,
+    height: size.height,
+  };
+}
+
+function getAnchors(device: Device) {
+  const rect = getDeviceRect(device);
+  return {
+    center: { x: device.x, y: device.y, anchor: "center" as const },
+    top: { x: rect.x + rect.width / 2, y: rect.y, anchor: "top" as const },
+    right: { x: rect.x + rect.width, y: rect.y + rect.height / 2, anchor: "right" as const },
+    bottom: { x: rect.x + rect.width / 2, y: rect.y + rect.height, anchor: "bottom" as const },
+    left: { x: rect.x, y: rect.y + rect.height / 2, anchor: "left" as const },
+  };
+}
+
+function getNearestAnchor(device: Device, point: { x: number; y: number }) {
+  const anchors = Object.values(getAnchors(device));
+  let nearest = anchors[0];
+  let nearestDistance = distance(point, nearest);
+  for (const anchor of anchors.slice(1)) {
+    const d = distance(point, anchor);
+    if (d < nearestDistance) {
+      nearest = anchor;
+      nearestDistance = d;
+    }
+  }
+  return { ...nearest, distance: nearestDistance };
+}
+
+function buildCablePath(start: { x: number; y: number }, points: CablePoint[], end: { x: number; y: number }) {
+  const segments = [`M ${start.x} ${start.y}`];
+  for (const point of points) {
+    segments.push(`L ${point.x} ${point.y}`);
+  }
+  segments.push(`L ${end.x} ${end.y}`);
+  return segments.join(" ");
+}
 
 export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
   const {
@@ -30,24 +101,38 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
     isEditMode,
     mode,
     setMode,
+    currentCableType,
+    setCableType,
     selectedId,
     selectedKind,
     select,
     addElement,
     addDevice,
+    addDeviceConnection,
+    updateDeviceConnection,
     updateElement,
     updateDevice,
     removeElement,
     removeDevice,
+    removeDeviceConnection,
   } = useStore();
 
   const svgRef = useRef<SVGSVGElement>(null);
   const [vb, setVb] = useState<ViewBox>({ x: 0, y: 0, w: BASE_W, h: BASE_H });
   const [hover, setHover] = useState<Device | null>(null);
+  const [hoverConnection, setHoverConnection] = useState<DeviceConnection | null>(null);
+  const [draftCable, setDraftCable] = useState<{
+    type: CableType;
+    start: { deviceId?: string; anchor: CableAnchor; x: number; y: number };
+    points: CablePoint[];
+    cursor: { x: number; y: number };
+    hoverDeviceId?: string;
+  } | null>(null);
   const [drag, setDrag] = useState<
     | { kind: "pan"; sx: number; sy: number; ovb: ViewBox }
     | { kind: "move-el"; id: string; dx: number; dy: number }
     | { kind: "move-dev"; id: string; dx: number; dy: number }
+    | { kind: "move-pt"; id: string; index: number }
     | { kind: "resize-el"; id: string; sx: number; sy: number; ow: number; oh: number }
     | { kind: "rotate-dev"; id: string; cx: number; cy: number }
     | { kind: "draw-room"; sx: number; sy: number; id: string }
@@ -56,11 +141,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
 
   const floorEls = mapElements.filter((element) => element.floorId === activeFloorId);
   const floorDevices = devices.filter((device) => device.floorId === activeFloorId);
-  const floorConnections = deviceConnections.filter((connection) => {
-    const from = floorDevices.find((item) => item.id === connection.fromDeviceId);
-    const to = floorDevices.find((item) => item.id === connection.toDeviceId);
-    return Boolean(from && to);
-  });
+  const floorConnections = deviceConnections.filter((connection) => connection.floorId === activeFloorId);
 
   const isEditableTarget = (target: EventTarget | null) =>
     target instanceof HTMLInputElement ||
@@ -172,13 +253,76 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
     return null;
   };
 
+  const getCableStart = (device: Device, point: { x: number; y: number }) => {
+    const nearest = getNearestAnchor(device, point);
+    return {
+      deviceId: device.id,
+      anchor: nearest.anchor,
+      x: nearest.x,
+      y: nearest.y,
+    };
+  };
+
+  const resolveCablePoint = (point: { x: number; y: number }) => {
+    let nearest: { device: Device; anchor: CableAnchor; x: number; y: number; distance: number } | null = null;
+    for (const device of floorDevices) {
+      const candidate = getNearestAnchor(device, point);
+      if (candidate.distance <= DEVICE_SNAP_DISTANCE && (!nearest || candidate.distance < nearest.distance)) {
+        nearest = { device, anchor: candidate.anchor, x: candidate.x, y: candidate.y, distance: candidate.distance };
+      }
+    }
+    if (nearest) {
+      return {
+        deviceId: nearest.device.id,
+        anchor: nearest.anchor,
+        x: nearest.x,
+        y: nearest.y,
+        snapped: true,
+      };
+    }
+    return {
+      x: snapGrid(point.x),
+      y: snapGrid(point.y),
+      snapped: false,
+    };
+  };
+
+  const finalizeDraftCable = (endPoint: ReturnType<typeof resolveCablePoint>) => {
+    if (!draftCable) return;
+    if (!draftCable.start) return;
+    const cable = {
+      objectId: activeObjectId ?? "",
+      floorId: activeFloorId ?? "",
+      type: draftCable.type,
+      from: {
+        deviceId: draftCable.start.deviceId,
+        anchor: draftCable.start.anchor,
+        x: draftCable.start.x,
+        y: draftCable.start.y,
+      },
+      to: {
+        deviceId: endPoint.deviceId,
+        anchor: endPoint.anchor ?? "center",
+        x: endPoint.x,
+        y: endPoint.y,
+      },
+      points: draftCable.points.map((point) => ({ ...point })),
+      label: cableLabels[draftCable.type],
+      notes: "",
+    };
+    addDeviceConnection(cable);
+    setDraftCable(null);
+    setMode("select");
+  };
+
   const onMouseDown = (e: MouseEvent<SVGSVGElement>) => {
     if (!activeFloorId) return;
     const pt = toSvg(e.clientX, e.clientY);
+    const targetIsSvg = (e.target as Element).tagName === "svg";
 
     if (
       e.button === 1 ||
-      (e.button === 0 && mode === "select" && (e.target as Element).tagName === "svg")
+      (e.button === 0 && mode === "select" && targetIsSvg)
     ) {
       setDrag({ kind: "pan", sx: e.clientX, sy: e.clientY, ovb: vb });
       select(null, null);
@@ -187,6 +331,43 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
 
     if (e.button !== 0) return;
     if (!isEditMode) return;
+
+    if (mode === "connector") {
+      const resolved = resolveCablePoint(pt);
+      if (!draftCable) {
+        if (!resolved.deviceId) return;
+        const startDevice = floorDevices.find((item) => item.id === resolved.deviceId);
+        if (!startDevice) return;
+        setDraftCable({
+          type: currentCableType,
+          start: getCableStart(startDevice, pt),
+          points: [],
+          cursor: pt,
+        });
+        select(startDevice.id, "device");
+        return;
+      }
+
+      if (resolved.deviceId && resolved.deviceId !== draftCable.start.deviceId) {
+        finalizeDraftCable(resolved);
+        return;
+      }
+
+      if (targetIsSvg) {
+        setDraftCable((current) =>
+          current
+            ? {
+                ...current,
+                points: [...current.points, { x: resolved.x, y: resolved.y }],
+                cursor: pt,
+              }
+            : current,
+        );
+        return;
+      }
+
+      return;
+    }
 
     if (mode === "room") {
       const id = addElement({
@@ -269,6 +450,20 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
   };
 
   const onMouseMove = (e: MouseEvent<SVGSVGElement>) => {
+    const pt = toSvg(e.clientX, e.clientY);
+    if (draftCable) {
+      const resolved = resolveCablePoint(pt);
+      setDraftCable((current) =>
+        current
+          ? {
+              ...current,
+              cursor: { x: resolved.x, y: resolved.y },
+              hoverDeviceId: resolved.deviceId,
+            }
+          : current,
+      );
+    }
+
     if (!drag) return;
     if (drag.kind === "pan") {
       const dx = ((e.clientX - drag.sx) / (svgRef.current?.clientWidth ?? 1)) * vb.w;
@@ -280,7 +475,6 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
     if (!isEditMode) return;
 
     if (drag.kind === "draw-room") {
-      const pt = toSvg(e.clientX, e.clientY);
       updateElement(drag.id, {
         x: Math.min(drag.sx, pt.x),
         y: Math.min(drag.sy, pt.y),
@@ -291,19 +485,25 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
     }
 
     if (drag.kind === "move-el") {
-      const pt = toSvg(e.clientX, e.clientY);
       updateElement(drag.id, { x: pt.x - drag.dx, y: pt.y - drag.dy });
       return;
     }
 
     if (drag.kind === "move-dev") {
-      const pt = toSvg(e.clientX, e.clientY);
       updateDevice(drag.id, { x: pt.x - drag.dx, y: pt.y - drag.dy });
       return;
     }
 
+    if (drag.kind === "move-pt") {
+      updateDeviceConnection(drag.id, {
+        points: floorConnections.find((item) => item.id === drag.id)?.points.map((point, index) =>
+          index === drag.index ? { x: snapGrid(pt.x), y: snapGrid(pt.y) } : point,
+        ) ?? [],
+      });
+      return;
+    }
+
     if (drag.kind === "resize-el") {
-      const pt = toSvg(e.clientX, e.clientY);
       updateElement(drag.id, {
         width: Math.max(20, drag.ow + (pt.x - drag.sx)),
         height: Math.max(20, drag.oh + (pt.y - drag.sy)),
@@ -312,7 +512,6 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
     }
 
     if (drag.kind === "rotate-dev") {
-      const pt = toSvg(e.clientX, e.clientY);
       const angle = (Math.atan2(pt.y - drag.cy, pt.x - drag.cx) * 180) / Math.PI;
       updateDevice(drag.id, { rotation: angle });
     }
@@ -322,17 +521,50 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (draftCable) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setDraftCable(null);
+          setMode("select");
+          return;
+        }
+        if (e.key === "Enter") {
+          e.preventDefault();
+          const resolved = resolveCablePoint(draftCable.cursor);
+          if (draftCable.start.deviceId || resolved.deviceId || draftCable.points.length > 0) {
+            finalizeDraftCable(resolved);
+          }
+          return;
+        }
+        if (e.key === "Backspace") {
+          e.preventDefault();
+          setDraftCable((current) =>
+            current && current.points.length > 0
+              ? { ...current, points: current.points.slice(0, -1) }
+              : current,
+          );
+          return;
+        }
+      }
+
       if (!isEditMode) return;
       if (isEditableTarget(e.target)) return;
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
+        if (selectedKind === "connection" && selectedId) removeDeviceConnection(selectedId);
         if (selectedKind === "device" && selectedId) removeDevice(selectedId);
         if (selectedKind === "element" && selectedId) removeElement(selectedId);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isEditMode, selectedId, selectedKind, removeDevice, removeElement]);
+  }, [draftCable, isEditMode, selectedId, selectedKind, removeDevice, removeElement, removeDeviceConnection, setMode]);
+
+  useEffect(() => {
+    if (!isEditMode || mode !== "connector") {
+      setDraftCable(null);
+    }
+  }, [isEditMode, mode]);
 
   useEffect(() => {
     if (highlightId) {
@@ -363,6 +595,22 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
       removeDevice(device.id);
       return;
     }
+    if (mode === "connector" && isEditMode) {
+      const pt = toSvg(e.clientX, e.clientY);
+      if (!draftCable) {
+        setDraftCable({
+          type: currentCableType,
+          start: getCableStart(device, pt),
+          points: [],
+          cursor: pt,
+          hoverDeviceId: device.id,
+        });
+      } else if (draftCable.start.deviceId !== device.id) {
+        finalizeDraftCable(getCableStart(device, pt));
+      }
+      select(device.id, "device");
+      return;
+    }
     select(device.id, "device");
     if (isEditMode && mode === "select") {
       const pt = toSvg(e.clientX, e.clientY);
@@ -370,9 +618,23 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
     }
   };
 
+  const resolveConnectionEndpoint = (endpoint: DeviceConnection["from"]) => {
+    const device = endpoint.deviceId ? floorDevices.find((item) => item.id === endpoint.deviceId) : null;
+    if (!device) return { x: endpoint.x, y: endpoint.y };
+    const anchors = getAnchors(device);
+    return anchors[endpoint.anchor ?? "center"] ?? { x: endpoint.x, y: endpoint.y };
+  };
+
+  const getConnectionPoints = (connection: DeviceConnection) => {
+    const start = resolveConnectionEndpoint(connection.from);
+    const end = resolveConnectionEndpoint(connection.to);
+    return { start, end };
+  };
+
   const renderDevice = (device: Device) => {
     const isSel = selectedId === device.id;
     const isHl = highlightId === device.id;
+    const isSnap = draftCable?.hoverDeviceId === device.id;
     const color = statusColors[device.status];
     const size = deviceSizes[device.type];
 
@@ -413,8 +675,8 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
               cy={device.y}
               r={isSel || isHl ? 14 : 12}
               fill={color}
-              stroke={isSel || isHl ? "#0f172a" : "white"}
-              strokeWidth={isSel || isHl ? 3 : 2}
+              stroke={isSel || isHl || isSnap ? "#0f172a" : "white"}
+              strokeWidth={isSel || isHl || isSnap ? 3.5 : 2}
             />
             <text
               x={device.x}
@@ -471,7 +733,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
           fill={color}
           fillOpacity={0.18}
           stroke={isSel || isHl ? "#0f172a" : color}
-          strokeWidth={isSel || isHl ? 2.5 : 1.5}
+          strokeWidth={isSel || isHl || isSnap ? 2.8 : 1.5}
         />
         <g
           onMouseDown={(e) => handleDeviceMouseDown(e, device)}
@@ -527,6 +789,12 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseUp}
+        onDoubleClick={(e) => {
+          if (!draftCable || mode !== "connector" || !isEditMode) return;
+          e.preventDefault();
+          const pt = resolveCablePoint(toSvg(e.clientX, e.clientY));
+          finalizeDraftCable(pt);
+        }}
         style={{
           cursor:
             drag?.kind === "pan"
@@ -548,23 +816,74 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
         <rect x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="url(#grid-lg)" />
 
         {floorConnections.map((connection) => {
-          const from = floorDevices.find((device) => device.id === connection.fromDeviceId);
-          const to = floorDevices.find((device) => device.id === connection.toDeviceId);
-          if (!from || !to) return null;
+          const { start, end } = getConnectionPoints(connection);
+          const path = buildCablePath(start, connection.points, end);
+          const style = cableStyles[connection.type];
+          const isSel = selectedKind === "connection" && selectedId === connection.id;
           return (
-            <line
-              key={connection.id}
-              x1={from.x}
-              y1={from.y}
-              x2={to.x}
-              y2={to.y}
-              stroke="#64748b"
-              strokeWidth={1.5}
-              strokeDasharray="5 4"
-              opacity={0.7}
-            />
+            <g key={connection.id}>
+              <path
+                d={path}
+                fill="none"
+                stroke={style.stroke}
+                strokeWidth={isSel ? style.width + 1.5 : style.width}
+                strokeDasharray={style.dash}
+                opacity={isSel ? 1 : 0.8}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  select(connection.id, "connection");
+                }}
+                onMouseEnter={() => setHoverConnection(connection)}
+                onMouseLeave={() => setHoverConnection(null)}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  if (isEditMode) select(connection.id, "connection");
+                }}
+                style={{ cursor: isEditMode ? "pointer" : "default" }}
+              />
+              {connection.points.map((point, index) => (
+                <circle
+                  key={`${connection.id}-${index}`}
+                  cx={point.x}
+                  cy={point.y}
+                  r={isSel && isEditMode ? 5 : 3}
+                  fill="#fff"
+                  stroke={style.stroke}
+                  strokeWidth={2}
+                  onMouseDown={(e) => {
+                    if (!isEditMode) return;
+                    e.stopPropagation();
+                    setDrag({ kind: "move-pt", id: connection.id, index });
+                    select(connection.id, "connection");
+                  }}
+                  style={{ cursor: isEditMode ? "grab" : "default" }}
+                />
+              ))}
+              <text
+                x={(start.x + end.x) / 2}
+                y={(start.y + end.y) / 2 - 6}
+                textAnchor="middle"
+                fontSize={10}
+                fill={style.stroke}
+                fontWeight={700}
+              >
+                {cableLabels[connection.type]}
+              </text>
+            </g>
           );
         })}
+
+        {draftCable && (
+          <path
+            d={buildCablePath(draftCable.start, draftCable.points, draftCable.cursor)}
+            fill="none"
+            stroke={cableStyles[draftCable.type].stroke}
+            strokeWidth={cableStyles[draftCable.type].width}
+            strokeDasharray="4 3"
+            opacity={0.6}
+            pointerEvents="none"
+          />
+        )}
 
         {floorEls.map((element) => {
           const isSel = selectedId === element.id;
@@ -664,6 +983,17 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
           <div className="text-muted-foreground">
             {deviceTypeLabels[hover.type]} • {hover.ip || "Без IP"} • {hover.status}
           </div>
+        </div>
+      )}
+
+      {hoverConnection && (
+        <div className="absolute bottom-16 left-3 bg-card border rounded-md shadow-md px-3 py-2 text-xs pointer-events-none max-w-xs">
+          <div className="font-semibold">{cableLabels[hoverConnection.type]}</div>
+          <div className="text-muted-foreground">
+            {(devices.find((item) => item.id === hoverConnection.from.deviceId)?.name ?? "Точка A")} →
+            {(devices.find((item) => item.id === hoverConnection.to.deviceId)?.name ?? "Точка B")}
+          </div>
+          {hoverConnection.notes && <div className="mt-1 text-muted-foreground">{hoverConnection.notes}</div>}
         </div>
       )}
 
