@@ -34,7 +34,7 @@ export const Route = createFileRoute("/cameras")({
 type SortKey = "name" | "ip" | "status" | "lastCheckedAt";
 
 function CamerasPage() {
-  const { cameras, floors, objects, focusCamera, removeCamera } = useStore();
+  const { cameras, floors, objects, focusCamera, removeCamera, isEditMode } = useStore();
   const [search, setSearch] = useState("");
   const [objectFilter, setObjectFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -237,20 +237,25 @@ function CamerasPage() {
                             <MapPin className="h-3 w-3 mr-1" /> На план
                           </Button>
                         </Link>
-                        <Link to="/" onClick={() => focusCamera(camera.id)}>
-                          <Button variant="ghost" size="sm">
-                            <Pencil className="h-3 w-3 mr-1" /> Правка
-                          </Button>
-                        </Link>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            confirm(`Удалить камеру "${camera.name}"?`) && removeCamera(camera.id)
-                          }
-                        >
-                          <Trash2 className="h-3 w-3 mr-1 text-destructive" /> Удалить
-                        </Button>
+                        {isEditMode && (
+                          <>
+                            <Link to="/" onClick={() => focusCamera(camera.id)}>
+                              <Button variant="ghost" size="sm">
+                                <Pencil className="h-3 w-3 mr-1" /> Правка
+                              </Button>
+                            </Link>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                confirm(`Удалить камеру "${camera.name}"?`) &&
+                                removeCamera(camera.id)
+                              }
+                            >
+                              <Trash2 className="h-3 w-3 mr-1 text-destructive" /> Удалить
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

@@ -13,6 +13,7 @@ export function Sidebar() {
     cameras,
     activeObjectId,
     activeFloorId,
+    isEditMode,
     setActiveObject,
     setActiveFloor,
     addObject,
@@ -49,6 +50,99 @@ export function Sidebar() {
     () => floors.find((floor) => floor.id === activeFloorId) ?? null,
     [floors, activeFloorId],
   );
+
+  if (!isEditMode) {
+    return (
+      <aside className="w-72 border-r bg-card flex flex-col h-full overflow-hidden">
+        <div className="p-3 border-b space-y-2">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <Building2 className="h-4 w-4" /> Объекты
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            Режим просмотра: можно выбирать объект и зону, но редактирование отключено.
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          {objects.length === 0 && (
+            <div className="rounded-md border border-dashed p-4 text-xs text-muted-foreground">
+              Нет объектов.
+            </div>
+          )}
+
+          {objects.map((object) => {
+            const isOpen = open[object.id] ?? true;
+            const objectFloors = floors
+              .filter((floor) => floor.objectId === object.id)
+              .sort((a, b) => a.sortOrder - b.sortOrder);
+
+            return (
+              <div key={object.id} className="rounded-md">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveObject(object.id);
+                    setOpen((current) => ({ ...current, [object.id]: !isOpen }));
+                  }}
+                  className={cn(
+                    "w-full flex items-center gap-1 px-2 py-1.5 rounded text-sm group text-left",
+                    activeObjectId === object.id
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-accent",
+                  )}
+                >
+                  <span onClick={(e) => e.stopPropagation()}>
+                    {isOpen ? (
+                      <ChevronDown className="h-3 w-3" />
+                    ) : (
+                      <ChevronRight className="h-3 w-3" />
+                    )}
+                  </span>
+                  <span className="flex-1 font-medium truncate">{object.name}</span>
+                  <span className="opacity-70 text-xs">{objectFloors.length}</span>
+                </button>
+
+                {isOpen && (
+                  <div className="ml-4 mt-1 space-y-0.5">
+                    {objectFloors.length === 0 && (
+                      <div className="px-2 py-1 text-xs text-muted-foreground">Нет зон</div>
+                    )}
+                    {objectFloors.map((floor) => {
+                      const count = cameras.filter((camera) => camera.floorId === floor.id).length;
+                      return (
+                        <button
+                          key={floor.id}
+                          className={cn(
+                            "w-full flex items-center gap-1 px-2 py-1 rounded text-xs text-left",
+                            activeFloorId === floor.id
+                              ? "bg-primary text-primary-foreground"
+                              : "hover:bg-accent",
+                          )}
+                          onClick={() => setActiveFloor(floor.id)}
+                        >
+                          <span className="flex-1 truncate">{floor.name}</span>
+                          <span className="opacity-70">{count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {activeFloor && (
+          <div className="border-t p-3 space-y-2">
+            <div className="text-xs font-semibold">Активная зона</div>
+            <div className="rounded-md border bg-background/60 px-2 py-1 text-xs">
+              {activeFloor.name}
+            </div>
+          </div>
+        )}
+      </aside>
+    );
+  }
 
   const floorsForActiveObject = activeObject
     ? floors

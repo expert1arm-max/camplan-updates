@@ -9,10 +9,12 @@ import {
   Trash2,
   Download,
   Upload,
-  Save,
   Search,
   Table2,
   RotateCcw,
+  Pencil,
+  Eye,
+  Check,
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { useStore } from "@/data/store";
@@ -45,7 +47,8 @@ const tools: { mode: EditorMode; icon: typeof Square; label: string }[] = [
 ];
 
 export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: string) => void }) {
-  const { mode, setMode, exportJSON, importJSON, resetDemo, savedAt } = useStore();
+  const { mode, isEditMode, setEditMode, setMode, exportJSON, importJSON, resetDemo, savedAt } =
+    useStore();
   const fileRef = useRef<HTMLInputElement>(null);
   const [savedFlash, setSavedFlash] = useState(false);
 
@@ -100,23 +103,51 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
   };
 
   return (
-    <div className="border-b bg-card px-3 py-2 flex items-center gap-2 flex-wrap">
-      <div className="font-semibold text-sm mr-2">CCTV Manager</div>
-      <div className="flex items-center gap-0.5 bg-muted rounded p-0.5">
-        {tools.map((t) => (
-          <button
-            key={t.mode}
-            title={t.label}
-            onClick={() => setMode(t.mode)}
-            className={cn(
-              "h-8 w-8 flex items-center justify-center rounded transition-colors",
-              mode === t.mode ? "bg-background shadow-sm text-primary" : "hover:bg-background/50",
-            )}
-          >
-            <t.icon className="h-4 w-4" />
-          </button>
-        ))}
+    <div
+      className={cn(
+        "border-b bg-card px-3 py-2 flex items-center gap-2 flex-wrap",
+        isEditMode && "ring-1 ring-primary/15 bg-card/95",
+      )}
+    >
+      <div className="flex items-center gap-2 mr-2">
+        <div className="font-semibold text-sm">CCTV Manager</div>
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide",
+            isEditMode
+              ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+              : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+          )}
+        >
+          {isEditMode ? <Pencil className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+          {isEditMode ? "Редактирование" : "Просмотр"}
+        </span>
+        {!isEditMode && savedFlash && (
+          <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+            Изменения сохранены
+          </span>
+        )}
       </div>
+
+      {isEditMode && (
+        <div className="flex items-center gap-0.5 bg-muted rounded p-0.5">
+          {tools.map((t) => (
+            <button
+              key={t.mode}
+              title={t.label}
+              onClick={() => setMode(t.mode)}
+              className={cn(
+                "h-8 w-8 flex items-center justify-center rounded transition-colors",
+                mode === t.mode
+                  ? "bg-background shadow-sm text-primary"
+                  : "hover:bg-background/50",
+              )}
+            >
+              <t.icon className="h-4 w-4" />
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="flex-1 max-w-md relative">
         <Search className="h-4 w-4 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -135,14 +166,23 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
       </Link>
 
       <Button
-        variant="outline"
+        variant={isEditMode ? "default" : "outline"}
         size="sm"
         onClick={() => {
-          setSavedFlash(true);
-          window.setTimeout(() => setSavedFlash(false), 1500);
+          if (isEditMode) {
+            setEditMode(false);
+            setMode("select");
+            setSavedFlash(true);
+            window.setTimeout(() => setSavedFlash(false), 1500);
+            return;
+          }
+
+          setEditMode(true);
+          setSavedFlash(false);
         }}
       >
-        <Save className="h-4 w-4 mr-1" /> {savedFlash ? "Сохранено ✓" : "Сохранить"}
+        {isEditMode ? <Check className="h-4 w-4 mr-1" /> : <Pencil className="h-4 w-4 mr-1" />}
+        {isEditMode ? (savedFlash ? "Сохранено ✓" : "Завершить редактирование") : "Редактировать"}
       </Button>
 
       <Button variant="outline" size="sm" onClick={handleExportJson}>

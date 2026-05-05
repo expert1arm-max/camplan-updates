@@ -73,6 +73,7 @@ function RootShell({ children }: { children: ReactNode }) {
 }
 
 function RootComponent() {
+  const isEditMode = useStore((state) => state.isEditMode);
   const undo = useStore((state) => state.undo);
   const redo = useStore((state) => state.redo);
   const copySelected = useStore((state) => state.copySelected);
@@ -93,6 +94,7 @@ function RootComponent() {
 
       const shortcutKey = event.key.toLowerCase();
       if (!(event.ctrlKey || event.metaKey)) return;
+      if (!isEditMode) return;
 
       if (shortcutKey === "z") {
         event.preventDefault();
@@ -124,7 +126,7 @@ function RootComponent() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [copySelected, pasteClipboard, redo, undo]);
+  }, [copySelected, isEditMode, pasteClipboard, redo, undo]);
 
   return <Outlet />;
 }

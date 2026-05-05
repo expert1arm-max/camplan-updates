@@ -18,6 +18,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
     activeObjectId,
     mapElements,
     cameras,
+    isEditMode,
     mode,
     setMode,
     selectedId,
@@ -89,6 +90,10 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
     }
 
     if (e.button !== 0) return;
+
+    if (!isEditMode) {
+      return;
+    }
 
     if (mode === "room") {
       const id = addElement({
@@ -207,6 +212,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!isEditMode) return;
       if (isEditableTarget(e.target)) return;
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
@@ -216,7 +222,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedId, selectedKind, removeCamera, removeElement]);
+  }, [isEditMode, selectedId, selectedKind, removeCamera, removeElement]);
 
   useEffect(() => {
     if (highlightId) {
@@ -235,7 +241,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
       return;
     }
     select(element.id, "element");
-    if (mode === "select") {
+    if (isEditMode && mode === "select") {
       const pt = toSvg(e.clientX, e.clientY);
       setDrag({ kind: "move-el", id: element.id, dx: pt.x - element.x, dy: pt.y - element.y });
     }
@@ -248,7 +254,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
       return;
     }
     select(camera.id, "camera");
-    if (mode === "select") {
+    if (isEditMode && mode === "select") {
       const pt = toSvg(e.clientX, e.clientY);
       setDrag({ kind: "move-cam", id: camera.id, dx: pt.x - camera.x, dy: pt.y - camera.y });
     }
@@ -272,7 +278,12 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseUp}
         style={{
-          cursor: drag?.kind === "pan" ? "grabbing" : mode === "select" ? "default" : "crosshair",
+          cursor:
+            drag?.kind === "pan"
+              ? "grabbing"
+              : !isEditMode || mode === "select"
+                ? "grab"
+                : "crosshair",
         }}
       >
         <defs>
@@ -293,7 +304,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
               <g
                 key={element.id}
                 onMouseDown={(e) => handleElClick(e, element)}
-                style={{ cursor: "move" }}
+                style={{ cursor: isEditMode ? "move" : "pointer" }}
               >
                 <text x={element.x} y={element.y} fontSize={16} fill="#111" fontWeight={500}>
                   {element.label}
@@ -349,7 +360,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
                   strokeWidth={2}
                 />
               )}
-              {isSel && element.type !== "wall" && (
+              {isEditMode && isSel && element.type !== "wall" && (
                 <rect
                   x={element.x + element.width - 6}
                   y={element.y + element.height - 6}
@@ -406,7 +417,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
                 onMouseDown={(e) => handleCamMouseDown(e, camera)}
                 onMouseEnter={() => setHover(camera)}
                 onMouseLeave={() => setHover(null)}
-                style={{ cursor: "move" }}
+                style={{ cursor: isEditMode ? "move" : "pointer" }}
               >
                 <circle
                   cx={camera.x}
@@ -437,7 +448,7 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
                   />
                 )}
               </g>
-              {isSel && (
+              {isEditMode && isSel && (
                 <circle
                   cx={camera.x + Math.cos((camera.rotation * Math.PI) / 180) * 30}
                   cy={camera.y + Math.sin((camera.rotation * Math.PI) / 180) * 30}
@@ -492,8 +503,9 @@ export function PlanCanvas({ highlightId }: { highlightId: string | null }) {
       </div>
 
       <div className="absolute top-2 left-2 bg-card border rounded-md px-2 py-1 text-xs text-muted-foreground">
-        Режим: <span className="font-semibold text-foreground">{mode}</span> • колесо мыши = масштаб
-        • ПКМ/средняя = панорама
+        Режим:{" "}
+        <span className="font-semibold text-foreground">{isEditMode ? "Редактирование" : "Просмотр"}</span>{" "}
+        • колесо мыши = масштаб • ПКМ/средняя = панорама
       </div>
     </div>
   );

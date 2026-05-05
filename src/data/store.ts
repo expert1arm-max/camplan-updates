@@ -19,6 +19,7 @@ interface State extends AppData {
   selectedId: string | null;
   selectedKind: "camera" | "element" | null;
   mode: EditorMode;
+  isEditMode: boolean;
   savedAt: number;
   isHydrated: boolean;
   history: EditorSnapshot[];
@@ -29,6 +30,7 @@ interface State extends AppData {
   setActiveFloor: (id: string | null) => void;
   focusCamera: (id: string) => void;
   focusElement: (id: string) => void;
+  setEditMode: (enabled: boolean) => void;
   setMode: (m: EditorMode) => void;
   select: (id: string | null, kind: "camera" | "element" | null) => void;
 
@@ -65,6 +67,7 @@ type EditorSnapshot = AppData & {
   selectedId: string | null;
   selectedKind: "camera" | "element" | null;
   mode: EditorMode;
+  isEditMode: boolean;
 };
 
 type ClipboardItem =
@@ -222,6 +225,7 @@ export const useStore = create<State>()((set, get) => ({
   selectedId: null,
   selectedKind: null,
   mode: "select",
+  isEditMode: false,
   savedAt: Date.now(),
   isHydrated: false,
   history: [],
@@ -236,6 +240,7 @@ export const useStore = create<State>()((set, get) => ({
       selectedId: null,
       selectedKind: null,
       mode: "select",
+      isEditMode: false,
       savedAt: Date.now(),
       isHydrated: true,
       history: [],
@@ -293,6 +298,12 @@ export const useStore = create<State>()((set, get) => ({
         mode: "select",
       };
     }),
+
+  setEditMode: (enabled) =>
+    set((state) => ({
+      isEditMode: enabled,
+      mode: enabled ? state.mode : "select",
+    })),
 
   setMode: (m) => set({ mode: m }),
   select: (id, kind) => set({ selectedId: id, selectedKind: kind }),
@@ -553,6 +564,7 @@ export const useStore = create<State>()((set, get) => ({
       selectedId: null,
       selectedKind: null,
       mode: "select",
+      isEditMode: false,
       isHydrated: true,
     }));
   },
@@ -568,6 +580,7 @@ export const useStore = create<State>()((set, get) => ({
       selectedId: null,
       selectedKind: null,
       mode: "select",
+      isEditMode: false,
       isHydrated: true,
     }));
   },

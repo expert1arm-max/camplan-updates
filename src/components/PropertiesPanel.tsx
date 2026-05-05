@@ -21,6 +21,7 @@ export function PropertiesPanel() {
   const {
     selectedId,
     selectedKind,
+    isEditMode,
     cameras,
     mapElements,
     updateCamera,
@@ -51,6 +52,7 @@ export function PropertiesPanel() {
     return (
       <CameraPanel
         cam={camera}
+        canEdit={isEditMode}
         onUpdate={(patch) => updateCamera(camera.id, patch)}
         onDelete={() => removeCamera(camera.id)}
         onDup={() => duplicateCamera(camera.id)}
@@ -63,6 +65,7 @@ export function PropertiesPanel() {
   return (
     <ElementPanel
       el={element}
+      canEdit={isEditMode}
       onUpdate={(patch) => updateElement(element.id, patch)}
       onDelete={() => removeElement(element.id)}
     />
@@ -71,11 +74,13 @@ export function PropertiesPanel() {
 
 function CameraPanel({
   cam,
+  canEdit,
   onUpdate,
   onDelete,
   onDup,
 }: {
   cam: Camera;
+  canEdit: boolean;
   onUpdate: (p: Partial<Camera>) => void;
   onDelete: () => void;
   onDup: () => void;
@@ -87,26 +92,28 @@ function CameraPanel({
     <aside className="w-80 border-l bg-card overflow-y-auto">
       <div className="p-3 border-b sticky top-0 bg-card flex items-center justify-between z-10">
         <div className="font-semibold text-sm truncate">{cam.name || "Камера"}</div>
-        <div className="flex gap-1">
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
-            onClick={onDup}
-            title="Дублировать"
-          >
-            <Files className="h-4 w-4" />
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
-            onClick={onDelete}
-            title="Удалить"
-          >
-            <Trash2 className="h-4 w-4 text-destructive" />
-          </Button>
-        </div>
+        {canEdit && (
+          <div className="flex gap-1">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              onClick={onDup}
+              title="Дублировать"
+            >
+              <Files className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              onClick={onDelete}
+              title="Удалить"
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="p-3 space-y-3 text-xs">
@@ -115,6 +122,7 @@ function CameraPanel({
             value={cam.name}
             onChange={(e) => onUpdate({ name: e.target.value })}
             className="h-8"
+            disabled={!canEdit}
           />
         </Field>
 
@@ -123,7 +131,7 @@ function CameraPanel({
             value={cam.status}
             onValueChange={(value) => onUpdate({ status: value as CameraStatus })}
           >
-            <SelectTrigger className="h-8">
+            <SelectTrigger className="h-8" disabled={!canEdit}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -142,6 +150,7 @@ function CameraPanel({
               value={cam.ip}
               onChange={(e) => onUpdate({ ip: e.target.value })}
               className="h-8"
+              disabled={!canEdit}
             />
             <Button
               size="sm"
@@ -159,6 +168,7 @@ function CameraPanel({
             value={cam.username}
             onChange={(e) => onUpdate({ username: e.target.value })}
             className="h-8"
+            disabled={!canEdit}
           />
         </Field>
 
@@ -169,6 +179,7 @@ function CameraPanel({
               value={cam.password}
               onChange={(e) => onUpdate({ password: e.target.value })}
               className="h-8 font-mono"
+              disabled={!canEdit}
             />
             <Button
               size="sm"
@@ -204,6 +215,7 @@ function CameraPanel({
               value={cam.rtspUrl}
               onChange={(e) => onUpdate({ rtspUrl: e.target.value })}
               className="h-8 font-mono"
+              disabled={!canEdit}
             />
             <Button
               size="sm"
@@ -221,6 +233,7 @@ function CameraPanel({
             value={cam.model}
             onChange={(e) => onUpdate({ model: e.target.value })}
             className="h-8"
+            disabled={!canEdit}
           />
         </Field>
 
@@ -229,6 +242,7 @@ function CameraPanel({
             value={cam.serialNumber}
             onChange={(e) => onUpdate({ serialNumber: e.target.value })}
             className="h-8"
+            disabled={!canEdit}
           />
         </Field>
 
@@ -237,6 +251,7 @@ function CameraPanel({
             value={cam.location}
             onChange={(e) => onUpdate({ location: e.target.value })}
             className="h-8"
+            disabled={!canEdit}
           />
         </Field>
 
@@ -245,6 +260,7 @@ function CameraPanel({
             value={cam.responsiblePerson}
             onChange={(e) => onUpdate({ responsiblePerson: e.target.value })}
             className="h-8"
+            disabled={!canEdit}
           />
         </Field>
 
@@ -254,6 +270,7 @@ function CameraPanel({
             value={cam.lastCheckedAt}
             onChange={(e) => onUpdate({ lastCheckedAt: e.target.value })}
             className="h-8"
+            disabled={!canEdit}
           />
         </Field>
 
@@ -262,6 +279,7 @@ function CameraPanel({
             value={cam.notes}
             onChange={(e) => onUpdate({ notes: e.target.value })}
             rows={3}
+            disabled={!canEdit}
           />
         </Field>
 
@@ -274,6 +292,7 @@ function CameraPanel({
               max={360}
               step={10}
               onValueChange={(value) => onUpdate({ fovAngle: value[0] })}
+              disabled={!canEdit}
             />
           </Field>
           <Field label={`Дальность: ${cam.fovDistance}px`}>
@@ -283,6 +302,7 @@ function CameraPanel({
               max={400}
               step={10}
               onValueChange={(value) => onUpdate({ fovDistance: value[0] })}
+              disabled={!canEdit}
             />
           </Field>
           <Field label={`Поворот: ${Math.round(cam.rotation)}°`}>
@@ -292,6 +312,7 @@ function CameraPanel({
               max={180}
               step={5}
               onValueChange={(value) => onUpdate({ rotation: value[0] })}
+              disabled={!canEdit}
             />
           </Field>
         </div>
@@ -302,10 +323,12 @@ function CameraPanel({
 
 function ElementPanel({
   el,
+  canEdit,
   onUpdate,
   onDelete,
 }: {
   el: MapElement;
+  canEdit: boolean;
   onUpdate: (p: Partial<MapElement>) => void;
   onDelete: () => void;
 }) {
@@ -313,9 +336,11 @@ function ElementPanel({
     <aside className="w-80 border-l bg-card overflow-y-auto">
       <div className="p-3 border-b flex items-center justify-between">
         <div className="font-semibold text-sm">Элемент: {el.type}</div>
-        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onDelete}>
-          <Trash2 className="h-4 w-4 text-destructive" />
-        </Button>
+        {canEdit && (
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onDelete}>
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        )}
       </div>
       <div className="p-3 space-y-3 text-xs">
         {(el.type === "room" || el.type === "text") && (
@@ -324,6 +349,7 @@ function ElementPanel({
               value={el.label ?? ""}
               onChange={(e) => onUpdate({ label: e.target.value })}
               className="h-8"
+              disabled={!canEdit}
             />
           </Field>
         )}
@@ -335,6 +361,7 @@ function ElementPanel({
                 value={el.color ?? "#dbeafe"}
                 onChange={(e) => onUpdate({ color: e.target.value })}
                 className="h-8 w-full rounded border"
+                disabled={!canEdit}
               />
             </Field>
             <div className="grid grid-cols-2 gap-2">
@@ -344,6 +371,7 @@ function ElementPanel({
                   value={Math.round(el.width)}
                   onChange={(e) => onUpdate({ width: +e.target.value })}
                   className="h-8"
+                  disabled={!canEdit}
                 />
               </Field>
               <Field label="Высота">
@@ -352,6 +380,7 @@ function ElementPanel({
                   value={Math.round(el.height)}
                   onChange={(e) => onUpdate({ height: +e.target.value })}
                   className="h-8"
+                  disabled={!canEdit}
                 />
               </Field>
             </div>
@@ -364,6 +393,7 @@ function ElementPanel({
               value={Math.round(el.x)}
               onChange={(e) => onUpdate({ x: +e.target.value })}
               className="h-8"
+              disabled={!canEdit}
             />
           </Field>
           <Field label="Y">
@@ -372,6 +402,7 @@ function ElementPanel({
               value={Math.round(el.y)}
               onChange={(e) => onUpdate({ y: +e.target.value })}
               className="h-8"
+              disabled={!canEdit}
             />
           </Field>
         </div>
