@@ -49,3 +49,6 @@
 
 - UI now has collapsible left and right panels.
 - Toolbar exports/imports the map as a project JSON and supports JPG export of the plan.
+
+- Toolbar project actions moved into a File dropdown.
+- Left and right panel collapse controls now sit above their respective panels.

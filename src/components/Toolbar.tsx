@@ -5,8 +5,7 @@ import {
   Download,
   DoorOpen,
   Eye,
-  ChevronLeft,
-  ChevronRight,
+  ChevronDown,
   Link2,
   Network,
   Pencil,
@@ -26,6 +25,13 @@ import { useStore, deviceTypeLabels } from "@/data/store";
 import type { CableType, DeviceType, EditorMode } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -71,17 +77,9 @@ const tools: { mode: EditorMode; icon: typeof Square; label: string }[] = [
 export function Toolbar({
   search,
   setSearch,
-  leftCollapsed,
-  rightCollapsed,
-  onToggleLeft,
-  onToggleRight,
 }: {
   search: string;
   setSearch: (s: string) => void;
-  leftCollapsed: boolean;
-  rightCollapsed: boolean;
-  onToggleLeft: () => void;
-  onToggleRight: () => void;
 }) {
   const {
     mode,
@@ -275,26 +273,6 @@ export function Toolbar({
         />
       </div>
 
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onToggleLeft}
-        title={leftCollapsed ? "Показать левое меню" : "Скрыть левое меню"}
-      >
-        {leftCollapsed ? <ChevronRight className="h-4 w-4 mr-1" /> : <ChevronLeft className="h-4 w-4 mr-1" />}
-        Левое меню
-      </Button>
-
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onToggleRight}
-        title={rightCollapsed ? "Показать правое меню" : "Скрыть правое меню"}
-      >
-        {rightCollapsed ? <ChevronLeft className="h-4 w-4 mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
-        Правое меню
-      </Button>
-
       <Link to="/cameras">
         <Button variant="outline" size="sm">
           <Table2 className="h-4 w-4 mr-1" /> Все устройства
@@ -321,21 +299,29 @@ export function Toolbar({
         {isEditMode ? (savedFlash ? "Сохранено ✓" : "Завершить редактирование") : "Редактировать"}
       </Button>
 
-      <Button variant="outline" size="sm" onClick={handleExportJson}>
-        <Download className="h-4 w-4 mr-1" /> Проект
-      </Button>
-
-      <Button variant="outline" size="sm" onClick={handleExportCsv}>
-        <Download className="h-4 w-4 mr-1" /> CSV
-      </Button>
-
-      <Button variant="outline" size="sm" onClick={handleExportJpg}>
-        JPG
-      </Button>
-
-      <Button variant="outline" size="sm" onClick={handleImport}>
-        <Upload className="h-4 w-4 mr-1" /> Открыть проект
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm">
+            Файл
+            <ChevronDown className="h-4 w-4 ml-1" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuItem onClick={handleExportJson}>
+            <Download className="h-4 w-4" /> Сохранить проект
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleImport}>
+            <Upload className="h-4 w-4" /> Открыть проект
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleExportJpg}>
+            <Download className="h-4 w-4" /> Экспорт JPG
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleExportCsv}>
+            <Download className="h-4 w-4" /> Экспорт CSV
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <input
         ref={fileRef}
         type="file"

@@ -22,3 +22,5 @@ Desktop-приложение `CCTV Manager` для Windows на базе React/V
 - Правая панель свойств устройства или элемента плана.
 
 - Toolbar now supports project JSON save/load, JPG export, and panel collapse toggles.
+
+- Project save/open and image export now live under a File dropdown; panel collapse controls are above the left and right menus.

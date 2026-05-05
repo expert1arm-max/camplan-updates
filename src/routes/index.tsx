@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Toolbar } from "@/components/Toolbar";
 import { Sidebar } from "@/components/Sidebar";
 import { PlanCanvas } from "@/components/PlanCanvas";
 import { PropertiesPanel } from "@/components/PropertiesPanel";
+import { Button } from "@/components/ui/button";
 import { deviceTypeLabels, statusColors, statusLabels, useStore } from "@/data/store";
 
 export const Route = createFileRoute("/")({
@@ -65,15 +67,45 @@ function Index() {
       <Toolbar
         search={search}
         setSearch={setSearch}
-        leftCollapsed={leftCollapsed}
-        rightCollapsed={rightCollapsed}
-        onToggleLeft={() => setLeftCollapsed((value) => !value)}
-        onToggleRight={() => setRightCollapsed((value) => !value)}
       />
       <div className="flex-1 flex overflow-hidden relative">
-        {!leftCollapsed && <Sidebar />}
+        <div className="flex h-full flex-col overflow-hidden">
+          <div className="border-r bg-card p-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 w-full justify-start"
+              onClick={() => setLeftCollapsed((value) => !value)}
+            >
+              {leftCollapsed ? (
+                <ChevronRight className="h-4 w-4 mr-1" />
+              ) : (
+                <ChevronLeft className="h-4 w-4 mr-1" />
+              )}
+              {leftCollapsed ? "Показать левое меню" : "Скрыть левое меню"}
+            </Button>
+          </div>
+          {!leftCollapsed && <Sidebar />}
+        </div>
         <PlanCanvas highlightId={highlight} />
-        {!rightCollapsed && <PropertiesPanel />}
+        <div className="flex h-full flex-col overflow-hidden">
+          <div className="border-l bg-card p-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 w-full justify-start"
+              onClick={() => setRightCollapsed((value) => !value)}
+            >
+              {rightCollapsed ? (
+                <ChevronLeft className="h-4 w-4 mr-1" />
+              ) : (
+                <ChevronRight className="h-4 w-4 mr-1" />
+              )}
+              {rightCollapsed ? "Показать правое меню" : "Скрыть правое меню"}
+            </Button>
+          </div>
+          {!rightCollapsed && <PropertiesPanel />}
+        </div>
 
         {results.length > 0 && (
           <div className="absolute top-2 left-1/2 -translate-x-1/2 w-[460px] bg-card border rounded-md shadow-lg z-20 max-h-80 overflow-y-auto">

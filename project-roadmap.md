@@ -31,3 +31,6 @@ MVP desktop-версии собран и упаковывается.
 
 - Verify project save/load and JPG export in Electron.
 - Verify left/right panel collapse and restore on relaunch.
+
+- Verify the File menu flow for project open/save and image export.
+- Verify panel collapse buttons stay attached above the left and right menus.
