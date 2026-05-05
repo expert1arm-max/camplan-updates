@@ -19,6 +19,8 @@
   - таблица всех камер
   - импорт/экспорт
   - demo data
+- Исправлена packaged-раздача статических assets из `dist/client`, чтобы свежий Windows `exe` открывал нормальный UI вместо unstyled/black screen.
+- Собран свежий unpacked-билд в `release-test\win-unpacked\CCTV Manager.exe`.
 - Добавлены команды:
   - `npm run dev`
   - `npm run dev:desktop`
