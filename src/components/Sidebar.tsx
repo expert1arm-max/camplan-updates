@@ -10,7 +10,7 @@ export function Sidebar() {
   const {
     objects,
     floors,
-    cameras,
+    devices,
     activeObjectId,
     activeFloorId,
     isEditMode,
@@ -108,7 +108,7 @@ export function Sidebar() {
                       <div className="px-2 py-1 text-xs text-muted-foreground">Нет зон</div>
                     )}
                     {objectFloors.map((floor) => {
-                      const count = cameras.filter((camera) => camera.floorId === floor.id).length;
+                      const count = devices.filter((device) => device.floorId === floor.id).length;
                       return (
                         <button
                           key={floor.id}
@@ -264,7 +264,7 @@ export function Sidebar() {
                     <div className="px-2 py-1 text-xs text-muted-foreground">Нет зон</div>
                   )}
                   {objectFloors.map((floor) => {
-                    const count = cameras.filter((camera) => camera.floorId === floor.id).length;
+                    const count = devices.filter((device) => device.floorId === floor.id).length;
                     return (
                       <div
                         key={floor.id}

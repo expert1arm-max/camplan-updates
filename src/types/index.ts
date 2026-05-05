@@ -1,29 +1,59 @@
-export type CameraStatus = "working" | "offline" | "needs_check" | "reserve" | "no_access";
+export type DeviceStatus = "working" | "offline" | "needs_check" | "reserve" | "no_access";
 
-export interface Camera {
+export type CameraStatus = DeviceStatus;
+
+export type DeviceType = "camera" | "nvr" | "dvr" | "switch" | "poe_switch";
+
+export interface DeviceConnection {
   id: string;
-  floorId: string;
-  objectId: string;
-  name: string;
-  ip: string;
-  username: string;
-  password: string;
-  rtspUrl: string;
-  model: string;
-  serialNumber: string;
-  location: string;
-  status: CameraStatus;
-  notes: string;
-  lastCheckedAt: string;
-  responsiblePerson: string;
-  x: number;
-  y: number;
-  rotation: number; // degrees
-  fovAngle: number; // angle degrees
-  fovDistance: number; // pixels
+  fromDeviceId: string;
+  toDeviceId: string;
+  connectionType: "network" | "poe" | "video" | "uplink";
+  label?: string;
   createdAt: string;
   updatedAt: string;
 }
+
+export interface Device {
+  id: string;
+  objectId: string;
+  floorId: string;
+  type: DeviceType;
+  name: string;
+  ip?: string;
+  username?: string;
+  password?: string;
+  model?: string;
+  serialNumber?: string;
+  location?: string;
+  status: DeviceStatus;
+  notes?: string;
+  x: number;
+  y: number;
+  rotation?: number;
+  createdAt: string;
+  updatedAt: string;
+
+  rtspUrl?: string;
+  fovAngle?: number;
+  fovDistance?: number;
+
+  channelCount?: number;
+  storageCapacityTb?: number;
+  hddCount?: number;
+  connectedCameraIds?: string[];
+
+  portCount?: number;
+  poePortCount?: number;
+  poeBudgetW?: number;
+  uplinkPorts?: number;
+  connectedDeviceIds?: string[];
+
+  lastCheckedAt?: string;
+  responsiblePerson?: string;
+}
+
+export type Camera = Device & { type: "camera" };
 
 export type ElementType = "room" | "wall" | "door" | "text";
 
@@ -68,8 +98,20 @@ export interface AppData {
   objects: SiteObject[];
   floors: Floor[];
   mapElements: MapElement[];
-  cameras: Camera[];
+  devices: Device[];
+  deviceConnections: DeviceConnection[];
   settings: AppSettings;
 }
 
-export type EditorMode = "select" | "room" | "wall" | "door" | "text" | "camera" | "delete";
+export type EditorMode =
+  | "select"
+  | "room"
+  | "wall"
+  | "door"
+  | "text"
+  | "camera"
+  | "nvr"
+  | "dvr"
+  | "switch"
+  | "poe_switch"
+  | "delete";

@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
 import { ArrowLeft, Download, MapPin, Pencil, Trash2 } from "lucide-react";
-import { useStore, statusLabels, statusColors } from "@/data/store";
-import type { CameraStatus } from "@/types";
+import { deviceTypeLabels, statusColors, statusLabels, useStore } from "@/data/store";
+import type { DeviceStatus, DeviceType } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -24,28 +24,29 @@ import {
 export const Route = createFileRoute("/cameras")({
   head: () => ({
     meta: [
-      { title: "Все камеры — CCTV Manager" },
-      { name: "description", content: "Таблица всех камер видеонаблюдения." },
+      { title: "Все устройства — CCTV Manager" },
+      { name: "description", content: "Таблица всех устройств видеонаблюдения." },
     ],
   }),
-  component: CamerasPage,
+  component: DevicesPage,
 });
 
-type SortKey = "name" | "ip" | "status" | "lastCheckedAt";
+type SortKey = "type" | "name" | "ip" | "status" | "lastCheckedAt";
 
-function CamerasPage() {
-  const { cameras, floors, objects, focusCamera, removeCamera, isEditMode } = useStore();
+function DevicesPage() {
+  const { devices, floors, objects, focusDevice, removeDevice, isEditMode } = useStore();
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
   const [objectFilter, setObjectFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const locationName = useCallback(
-    (camera: (typeof cameras)[number]) => {
-      const floor = floors.find((item) => item.id === camera.floorId);
+    (device: (typeof devices)[number]) => {
+      const floor = floors.find((item) => item.id === device.floorId);
       const object = objects.find(
-        (item) => item.id === camera.objectId || item.id === floor?.objectId,
+        (item) => item.id === device.objectId || item.id === floor?.objectId,
       );
       return { object: object?.name ?? "", floor: floor?.name ?? "", objectId: object?.id ?? "" };
     },
@@ -54,24 +55,28 @@ function CamerasPage() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    const list = cameras.filter((camera) => {
-      const place = locationName(camera);
+    const list = devices.filter((device) => {
+      const place = locationName(device);
       if (
         q &&
         !(
-          camera.name.toLowerCase().includes(q) ||
-          camera.ip.toLowerCase().includes(q) ||
-          camera.location.toLowerCase().includes(q) ||
+          device.name.toLowerCase().includes(q) ||
+          (device.ip ?? "").toLowerCase().includes(q) ||
+          deviceTypeLabels[device.type].toLowerCase().includes(q) ||
+          (device.model ?? "").toLowerCase().includes(q) ||
+          (device.location ?? "").toLowerCase().includes(q) ||
+          (device.notes ?? "").toLowerCase().includes(q) ||
           place.object.toLowerCase().includes(q) ||
           place.floor.toLowerCase().includes(q) ||
-          statusLabels[camera.status].toLowerCase().includes(q)
+          statusLabels[device.status].toLowerCase().includes(q)
         )
       ) {
         return false;
       }
 
+      if (typeFilter !== "all" && device.type !== typeFilter) return false;
       if (objectFilter !== "all" && place.objectId !== objectFilter) return false;
-      if (statusFilter !== "all" && camera.status !== statusFilter) return false;
+      if (statusFilter !== "all" && device.status !== statusFilter) return false;
       return true;
     });
 
@@ -80,32 +85,36 @@ function CamerasPage() {
       const right = String(b[sortKey] ?? "");
       return sortDir === "asc" ? left.localeCompare(right) : right.localeCompare(left);
     });
-  }, [cameras, search, objectFilter, statusFilter, sortKey, sortDir, locationName]);
+  }, [devices, search, typeFilter, objectFilter, statusFilter, sortKey, sortDir, locationName]);
 
   const exportCsv = () => {
     const headers = [
+      "type",
       "name",
       "ip",
       "object",
       "floor",
       "status",
+      "model",
       "username",
       "password",
       "lastCheckedAt",
       "notes",
     ];
-    const rows = filtered.map((camera) => {
-      const place = locationName(camera);
+    const rows = filtered.map((device) => {
+      const place = locationName(device);
       return [
-        camera.name,
-        camera.ip,
+        deviceTypeLabels[device.type],
+        device.name,
+        device.ip ?? "",
         place.object,
         place.floor,
-        camera.status,
-        camera.username,
-        camera.password ? "******" : "",
-        camera.lastCheckedAt,
-        camera.notes,
+        device.status,
+        device.model ?? "",
+        device.username ?? "",
+        device.password ? "******" : "",
+        device.lastCheckedAt ?? "",
+        device.notes ?? "",
       ]
         .map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`)
         .join(",");
@@ -115,7 +124,7 @@ function CamerasPage() {
     const blob = new Blob([csv], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `cameras-${Date.now()}.csv`;
+    a.download = `devices-${Date.now()}.csv`;
     a.click();
   };
 
@@ -136,7 +145,7 @@ function CamerasPage() {
             <ArrowLeft className="h-4 w-4 mr-1" /> К плану
           </Button>
         </Link>
-        <h1 className="font-semibold">Все камеры ({filtered.length})</h1>
+        <h1 className="font-semibold">Все устройства ({filtered.length})</h1>
         <div className="flex-1" />
         <Input
           placeholder="Поиск..."
@@ -144,6 +153,19 @@ function CamerasPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="h-9 w-56"
         />
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger className="h-9 w-44">
+            <SelectValue placeholder="Тип" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Все типы</SelectItem>
+            {(Object.keys(deviceTypeLabels) as DeviceType[]).map((type) => (
+              <SelectItem key={type} value={type}>
+                {deviceTypeLabels[type]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Select value={objectFilter} onValueChange={setObjectFilter}>
           <SelectTrigger className="h-9 w-40">
             <SelectValue placeholder="Объект" />
@@ -163,7 +185,7 @@ function CamerasPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Все статусы</SelectItem>
-            {(Object.keys(statusLabels) as CameraStatus[]).map((status) => (
+            {(Object.keys(statusLabels) as DeviceStatus[]).map((status) => (
               <SelectItem key={status} value={status}>
                 {statusLabels[status]}
               </SelectItem>
@@ -180,6 +202,9 @@ function CamerasPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="cursor-pointer" onClick={() => toggleSort("type")}>
+                  Тип
+                </TableHead>
                 <TableHead className="cursor-pointer" onClick={() => toggleSort("name")}>
                   Название
                 </TableHead>
@@ -191,6 +216,7 @@ function CamerasPage() {
                 <TableHead className="cursor-pointer" onClick={() => toggleSort("status")}>
                   Статус
                 </TableHead>
+                <TableHead>Модель</TableHead>
                 <TableHead>Логин</TableHead>
                 <TableHead>Пароль</TableHead>
                 <TableHead className="cursor-pointer" onClick={() => toggleSort("lastCheckedAt")}>
@@ -201,45 +227,47 @@ function CamerasPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((camera) => {
-                const place = locationName(camera);
+              {filtered.map((device) => {
+                const place = locationName(device);
                 return (
-                  <TableRow key={camera.id}>
-                    <TableCell className="font-medium">{camera.name}</TableCell>
-                    <TableCell className="font-mono text-xs">{camera.ip || "—"}</TableCell>
+                  <TableRow key={device.id}>
+                    <TableCell className="text-xs font-medium">{deviceTypeLabels[device.type]}</TableCell>
+                    <TableCell className="font-medium">{device.name}</TableCell>
+                    <TableCell className="font-mono text-xs">{device.ip || "—"}</TableCell>
                     <TableCell>{place.object}</TableCell>
                     <TableCell>{place.floor}</TableCell>
                     <TableCell>
                       <span
                         className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium"
                         style={{
-                          background: `${statusColors[camera.status]}22`,
-                          color: statusColors[camera.status],
+                          background: `${statusColors[device.status]}22`,
+                          color: statusColors[device.status],
                         }}
                       >
                         <span
                           className="h-1.5 w-1.5 rounded-full"
-                          style={{ background: statusColors[camera.status] }}
+                          style={{ background: statusColors[device.status] }}
                         />
-                        {statusLabels[camera.status]}
+                        {statusLabels[device.status]}
                       </span>
                     </TableCell>
-                    <TableCell className="text-xs">{camera.username}</TableCell>
+                    <TableCell className="text-xs">{device.model ?? "—"}</TableCell>
+                    <TableCell className="text-xs">{device.username ?? "—"}</TableCell>
                     <TableCell className="text-xs font-mono">
-                      {camera.password ? "••••••" : "—"}
+                      {device.password ? "••••••" : "—"}
                     </TableCell>
-                    <TableCell className="text-xs">{camera.lastCheckedAt || "—"}</TableCell>
-                    <TableCell className="text-xs max-w-[200px] truncate">{camera.notes}</TableCell>
+                    <TableCell className="text-xs">{device.lastCheckedAt || "—"}</TableCell>
+                    <TableCell className="text-xs max-w-[200px] truncate">{device.notes ?? ""}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <Link to="/" onClick={() => focusCamera(camera.id)}>
+                        <Link to="/" onClick={() => focusDevice(device.id)}>
                           <Button variant="ghost" size="sm">
                             <MapPin className="h-3 w-3 mr-1" /> На план
                           </Button>
                         </Link>
                         {isEditMode && (
                           <>
-                            <Link to="/" onClick={() => focusCamera(camera.id)}>
+                            <Link to="/" onClick={() => focusDevice(device.id)}>
                               <Button variant="ghost" size="sm">
                                 <Pencil className="h-3 w-3 mr-1" /> Правка
                               </Button>
@@ -248,8 +276,8 @@ function CamerasPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() =>
-                                confirm(`Удалить камеру "${camera.name}"?`) &&
-                                removeCamera(camera.id)
+                                confirm(`Удалить устройство "${device.name}"?`) &&
+                                removeDevice(device.id)
                               }
                             >
                               <Trash2 className="h-3 w-3 mr-1 text-destructive" /> Удалить
@@ -263,8 +291,8 @@ function CamerasPage() {
               })}
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
-                    Камеры не найдены
+                  <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
+                    Устройства не найдены
                   </TableCell>
                 </TableRow>
               )}

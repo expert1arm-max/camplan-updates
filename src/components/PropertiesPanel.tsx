@@ -1,7 +1,7 @@
-import { useState, type ReactNode } from "react";
-import { Copy, Eye, EyeOff, Files, Trash2 } from "lucide-react";
-import { useStore, statusLabels } from "@/data/store";
-import type { Camera, CameraStatus, MapElement } from "@/types";
+import { useMemo, useState, type ReactNode } from "react";
+import { Copy, Eye, EyeOff, Files, Link2, Trash2 } from "lucide-react";
+import { deviceTypeLabels, statusLabels, useStore } from "@/data/store";
+import type { Device, DeviceConnection, DeviceStatus, DeviceType, MapElement } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +15,8 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 
-const statuses: CameraStatus[] = ["working", "offline", "needs_check", "reserve", "no_access"];
+const statuses: DeviceStatus[] = ["working", "offline", "needs_check", "reserve", "no_access"];
+const deviceTypes: DeviceType[] = ["camera", "nvr", "dvr", "switch", "poe_switch"];
 
 export function PropertiesPanel() {
   const {
@@ -23,22 +24,24 @@ export function PropertiesPanel() {
     selectedKind,
     isEditMode,
     setEditMode,
-    cameras,
+    devices,
     mapElements,
-    updateCamera,
+    deviceConnections,
+    updateDevice,
     updateElement,
-    removeCamera,
-    duplicateCamera,
+    removeDevice,
+    duplicateDevice,
     removeElement,
+    toggleDeviceConnection,
   } = useStore();
 
   if (!selectedId || !selectedKind) {
     return (
       <aside className="w-80 border-l bg-card p-4 text-sm text-muted-foreground overflow-y-auto">
-        Выберите камеру или элемент на плане, чтобы редактировать его свойства.
+        Выберите устройство или элемент на плане, чтобы редактировать его свойства.
         <div className="mt-4 space-y-2 text-xs">
           <div className="font-semibold text-foreground">Подсказки:</div>
-          <div>• Двойной клик по камере — открыть карточку</div>
+          <div>• Двойной клик по устройству — открыть карточку</div>
           <div>• Перетаскивайте элементы мышкой</div>
           <div>• Синяя точка возле камеры — поворот</div>
           <div>• Delete — удалить выбранное</div>
@@ -47,17 +50,22 @@ export function PropertiesPanel() {
     );
   }
 
-  if (selectedKind === "camera") {
-    const camera = cameras.find((item) => item.id === selectedId);
-    if (!camera) return null;
+  if (selectedKind === "device") {
+    const device = devices.find((item) => item.id === selectedId);
+    if (!device) return null;
     return (
-      <CameraPanel
-        cam={camera}
+      <DevicePanel
+        device={device}
         canEdit={isEditMode}
+        connections={deviceConnections}
+        devices={devices}
         onEnterEditMode={() => setEditMode(true)}
-        onUpdate={(patch) => updateCamera(camera.id, patch)}
-        onDelete={() => removeCamera(camera.id)}
-        onDup={() => duplicateCamera(camera.id)}
+        onUpdate={(patch) => updateDevice(device.id, patch)}
+        onDelete={() => removeDevice(device.id)}
+        onDup={() => duplicateDevice(device.id)}
+        onToggleConnection={(toDeviceId, connectionType) =>
+          toggleDeviceConnection(device.id, toDeviceId, connectionType)
+        }
       />
     );
   }
@@ -75,28 +83,60 @@ export function PropertiesPanel() {
   );
 }
 
-function CameraPanel({
-  cam,
+function DevicePanel({
+  device,
   canEdit,
+  connections,
+  devices,
   onEnterEditMode,
   onUpdate,
   onDelete,
   onDup,
+  onToggleConnection,
 }: {
-  cam: Camera;
+  device: Device;
   canEdit: boolean;
+  connections: DeviceConnection[];
+  devices: Device[];
   onEnterEditMode: () => void;
-  onUpdate: (p: Partial<Camera>) => void;
+  onUpdate: (p: Partial<Device>) => void;
   onDelete: () => void;
   onDup: () => void;
+  onToggleConnection: (
+    toDeviceId: string,
+    connectionType: DeviceConnection["connectionType"],
+  ) => void;
 }) {
   const [showPwd, setShowPwd] = useState(false);
   const copy = (value: string) => navigator.clipboard.writeText(value);
+  const related = useMemo(
+    () =>
+      connections
+        .filter((connection) => connection.fromDeviceId === device.id)
+        .map((connection) => ({
+          connection,
+          target: devices.find((item) => item.id === connection.toDeviceId) ?? null,
+        }))
+        .filter((item) => item.target),
+    [connections, device.id, devices],
+  );
+  const candidates = useMemo(
+    () =>
+      devices.filter((item) => item.id !== device.id && item.objectId === device.objectId),
+    [device.id, device.objectId, devices],
+  );
+
+  const connectionTypeForTarget = (target: Device) => {
+    if (device.type === "poe_switch") return target.type === "camera" ? "poe" : "uplink";
+    if (device.type === "switch") return "network";
+    if (device.type === "nvr" || device.type === "dvr") return "video";
+    return "network";
+  };
 
   return (
     <aside className="w-80 border-l bg-card overflow-y-auto">
       <div className="p-3 border-b sticky top-0 bg-card flex items-center justify-between z-10">
-        <div className="font-semibold text-sm truncate">{cam.name || "Камера"}</div>
+        <div className="font-semibold text-sm truncate">{device.name || "Устройство"}</div>
         {canEdit && (
           <div className="flex gap-1">
             <Button
@@ -124,7 +164,7 @@ function CameraPanel({
       {!canEdit && (
         <div className="px-3 pt-3">
           <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground flex items-center justify-between gap-2">
-            <span>Пароль и другие поля можно менять в режиме редактирования.</span>
+            <span>Поля доступны только в режиме редактирования.</span>
             <Button size="sm" variant="outline" className="h-7" onClick={onEnterEditMode}>
               Редактировать
             </Button>
@@ -133,9 +173,28 @@ function CameraPanel({
       )}
 
       <div className="p-3 space-y-3 text-xs">
+        <Field label="Тип устройства">
+          <Select
+            value={device.type}
+            onValueChange={(value) => onUpdate({ type: value as DeviceType })}
+            disabled={!canEdit}
+          >
+            <SelectTrigger className="h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {deviceTypes.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {deviceTypeLabels[type]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+
         <Field label="Название">
           <Input
-            value={cam.name}
+            value={device.name}
             onChange={(e) => onUpdate({ name: e.target.value })}
             className="h-8"
             disabled={!canEdit}
@@ -144,8 +203,8 @@ function CameraPanel({
 
         <Field label="Статус">
           <Select
-            value={cam.status}
-            onValueChange={(value) => onUpdate({ status: value as CameraStatus })}
+            value={device.status}
+            onValueChange={(value) => onUpdate({ status: value as DeviceStatus })}
           >
             <SelectTrigger className="h-8" disabled={!canEdit}>
               <SelectValue />
@@ -163,7 +222,7 @@ function CameraPanel({
         <Field label="IP-адрес">
           <div className="flex gap-1">
             <Input
-              value={cam.ip}
+              value={device.ip ?? ""}
               onChange={(e) => onUpdate({ ip: e.target.value })}
               className="h-8"
               disabled={!canEdit}
@@ -172,7 +231,7 @@ function CameraPanel({
               size="sm"
               variant="ghost"
               className="h-8 px-2 shrink-0"
-              onClick={() => copy(cam.ip)}
+              onClick={() => copy(device.ip ?? "")}
             >
               <Copy className="h-3 w-3 mr-1" /> Скопировать IP
             </Button>
@@ -181,7 +240,7 @@ function CameraPanel({
 
         <Field label="Логин">
           <Input
-            value={cam.username}
+            value={device.username ?? ""}
             onChange={(e) => onUpdate({ username: e.target.value })}
             className="h-8"
             disabled={!canEdit}
@@ -193,7 +252,7 @@ function CameraPanel({
             <div className="relative">
               <Input
                 type="text"
-                value={cam.password}
+                value={device.password ?? ""}
                 onChange={(e) => onUpdate({ password: e.target.value })}
                 className={`h-8 w-full font-mono pr-3 ${
                   showPwd ? "" : "text-transparent caret-foreground"
@@ -203,12 +262,12 @@ function CameraPanel({
                 spellCheck={false}
                 autoComplete="new-password"
               />
-              {!showPwd && cam.password && (
+              {!showPwd && device.password && (
                 <div
                   aria-hidden="true"
                   className="pointer-events-none absolute inset-0 flex items-center px-3 font-mono text-foreground/75 overflow-hidden whitespace-nowrap"
                 >
-                  {"*".repeat(cam.password.length)}
+                  {"*".repeat(device.password.length)}
                 </div>
               )}
             </div>
@@ -233,7 +292,7 @@ function CameraPanel({
                 size="sm"
                 variant="ghost"
                 className="h-8 px-2 shrink-0"
-                onClick={() => copy(cam.password)}
+                onClick={() => copy(device.password ?? "")}
               >
                 <Copy className="h-3 w-3 mr-1" /> Скопировать пароль
               </Button>
@@ -242,28 +301,9 @@ function CameraPanel({
           {/* TODO: later master password encryption. */}
         </Field>
 
-        <Field label="RTSP-строка">
-          <div className="flex gap-1">
-            <Input
-              value={cam.rtspUrl}
-              onChange={(e) => onUpdate({ rtspUrl: e.target.value })}
-              className="h-8 font-mono"
-              disabled={!canEdit}
-            />
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-8 px-2 shrink-0"
-              onClick={() => copy(cam.rtspUrl)}
-            >
-              <Copy className="h-3 w-3 mr-1" /> Скопировать RTSP
-            </Button>
-          </div>
-        </Field>
-
         <Field label="Модель">
           <Input
-            value={cam.model}
+            value={device.model ?? ""}
             onChange={(e) => onUpdate({ model: e.target.value })}
             className="h-8"
             disabled={!canEdit}
@@ -272,7 +312,7 @@ function CameraPanel({
 
         <Field label="Серийный номер">
           <Input
-            value={cam.serialNumber}
+            value={device.serialNumber ?? ""}
             onChange={(e) => onUpdate({ serialNumber: e.target.value })}
             className="h-8"
             disabled={!canEdit}
@@ -281,7 +321,7 @@ function CameraPanel({
 
         <Field label="Место установки">
           <Input
-            value={cam.location}
+            value={device.location ?? ""}
             onChange={(e) => onUpdate({ location: e.target.value })}
             className="h-8"
             disabled={!canEdit}
@@ -290,7 +330,7 @@ function CameraPanel({
 
         <Field label="Ответственный">
           <Input
-            value={cam.responsiblePerson}
+            value={device.responsiblePerson ?? ""}
             onChange={(e) => onUpdate({ responsiblePerson: e.target.value })}
             className="h-8"
             disabled={!canEdit}
@@ -300,7 +340,7 @@ function CameraPanel({
         <Field label="Дата последней проверки">
           <Input
             type="date"
-            value={cam.lastCheckedAt}
+            value={device.lastCheckedAt ?? ""}
             onChange={(e) => onUpdate({ lastCheckedAt: e.target.value })}
             className="h-8"
             disabled={!canEdit}
@@ -309,48 +349,225 @@ function CameraPanel({
 
         <Field label="Заметки">
           <Textarea
-            value={cam.notes}
+            value={device.notes ?? ""}
             onChange={(e) => onUpdate({ notes: e.target.value })}
             rows={3}
             disabled={!canEdit}
           />
         </Field>
 
-        <div className="pt-2 border-t space-y-3">
-          <div className="font-semibold text-foreground">Обзор</div>
-          <Field label={`Угол обзора: ${cam.fovAngle}°`}>
-            <Slider
-              value={[cam.fovAngle]}
-              min={30}
-              max={360}
-              step={10}
-              onValueChange={(value) => onUpdate({ fovAngle: value[0] })}
-              disabled={!canEdit}
-            />
-          </Field>
-          <Field label={`Дальность: ${cam.fovDistance}px`}>
-            <Slider
-              value={[cam.fovDistance]}
-              min={40}
-              max={400}
-              step={10}
-              onValueChange={(value) => onUpdate({ fovDistance: value[0] })}
-              disabled={!canEdit}
-            />
-          </Field>
-          <Field label={`Поворот: ${Math.round(cam.rotation)}°`}>
-            <Slider
-              value={[cam.rotation]}
-              min={-180}
-              max={180}
-              step={5}
-              onValueChange={(value) => onUpdate({ rotation: value[0] })}
-              disabled={!canEdit}
-            />
-          </Field>
-        </div>
+        {device.type === "camera" && (
+          <>
+            <Field label="RTSP-строка">
+              <div className="flex gap-1">
+                <Input
+                  value={device.rtspUrl ?? ""}
+                  onChange={(e) => onUpdate({ rtspUrl: e.target.value })}
+                  className="h-8 font-mono"
+                  disabled={!canEdit}
+                />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-2 shrink-0"
+                  onClick={() => copy(device.rtspUrl ?? "")}
+                >
+                  <Copy className="h-3 w-3 mr-1" /> Скопировать RTSP
+                </Button>
+              </div>
+            </Field>
+            <div className="pt-2 border-t space-y-3">
+              <div className="font-semibold text-foreground">Обзор</div>
+              <Field label={`Угол обзора: ${device.fovAngle ?? 90}°`}>
+                <Slider
+                  value={[device.fovAngle ?? 90]}
+                  min={30}
+                  max={360}
+                  step={10}
+                  onValueChange={(value) => onUpdate({ fovAngle: value[0] })}
+                  disabled={!canEdit}
+                />
+              </Field>
+              <Field label={`Дальность: ${device.fovDistance ?? 150}px`}>
+                <Slider
+                  value={[device.fovDistance ?? 150]}
+                  min={40}
+                  max={400}
+                  step={10}
+                  onValueChange={(value) => onUpdate({ fovDistance: value[0] })}
+                  disabled={!canEdit}
+                />
+              </Field>
+              <Field label={`Поворот: ${Math.round(device.rotation ?? 0)}°`}>
+                <Slider
+                  value={[device.rotation ?? 0]}
+                  min={-180}
+                  max={180}
+                  step={5}
+                  onValueChange={(value) => onUpdate({ rotation: value[0] })}
+                  disabled={!canEdit}
+                />
+              </Field>
+            </div>
+          </>
+        )}
+
+        {device.type === "nvr" || device.type === "dvr" ? (
+          <div className="pt-2 border-t space-y-3">
+            <div className="font-semibold text-foreground">Запись</div>
+            <Field label="Количество каналов">
+              <Input
+                type="number"
+                value={device.channelCount ?? 0}
+                onChange={(e) => onUpdate({ channelCount: Number(e.target.value) })}
+                className="h-8"
+                disabled={!canEdit}
+              />
+            </Field>
+            <Field label="Объём хранения, TB">
+              <Input
+                type="number"
+                value={device.storageCapacityTb ?? 0}
+                onChange={(e) => onUpdate({ storageCapacityTb: Number(e.target.value) })}
+                className="h-8"
+                disabled={!canEdit}
+              />
+            </Field>
+            <Field label="Количество HDD">
+              <Input
+                type="number"
+                value={device.hddCount ?? 0}
+                onChange={(e) => onUpdate({ hddCount: Number(e.target.value) })}
+                className="h-8"
+                disabled={!canEdit}
+              />
+            </Field>
+          </div>
+        ) : null}
+
+        {device.type === "switch" || device.type === "poe_switch" ? (
+          <div className="pt-2 border-t space-y-3">
+            <div className="font-semibold text-foreground">Сеть</div>
+            <Field label="Количество портов">
+              <Input
+                type="number"
+                value={device.portCount ?? 0}
+                onChange={(e) => onUpdate({ portCount: Number(e.target.value) })}
+                className="h-8"
+                disabled={!canEdit}
+              />
+            </Field>
+            {device.type === "poe_switch" && (
+              <>
+                <Field label="PoE-порты">
+                  <Input
+                    type="number"
+                    value={device.poePortCount ?? 0}
+                    onChange={(e) => onUpdate({ poePortCount: Number(e.target.value) })}
+                    className="h-8"
+                    disabled={!canEdit}
+                  />
+                </Field>
+                <Field label="PoE budget, W">
+                  <Input
+                    type="number"
+                    value={device.poeBudgetW ?? 0}
+                    onChange={(e) => onUpdate({ poeBudgetW: Number(e.target.value) })}
+                    className="h-8"
+                    disabled={!canEdit}
+                  />
+                </Field>
+              </>
+            )}
+            <Field label="Uplink ports">
+              <Input
+                type="number"
+                value={device.uplinkPorts ?? 0}
+                onChange={(e) => onUpdate({ uplinkPorts: Number(e.target.value) })}
+                className="h-8"
+                disabled={!canEdit}
+              />
+            </Field>
+          </div>
+        ) : null}
+
+        {canEdit && (
+          <div className="pt-2 border-t space-y-2">
+            <div className="font-semibold text-foreground">Связи</div>
+            {device.type === "nvr" || device.type === "dvr" ? (
+              <ConnectionList
+                title="Подключённые камеры"
+                candidates={candidates.filter((item) => item.type === "camera")}
+                related={related}
+                onToggleConnection={onToggleConnection}
+                connectionTypeResolver={connectionTypeForTarget}
+              />
+            ) : device.type === "switch" || device.type === "poe_switch" ? (
+              <ConnectionList
+                title="Подключённые устройства"
+                candidates={candidates}
+                related={related}
+                onToggleConnection={onToggleConnection}
+                connectionTypeResolver={connectionTypeForTarget}
+              />
+            ) : null}
+          </div>
+        )}
       </div>
     </aside>
+  );
+}
+
+function ConnectionList({
+  title,
+  candidates,
+  related,
+  onToggleConnection,
+  connectionTypeResolver,
+}: {
+  title: string;
+  candidates: Device[];
+  related: { connection: DeviceConnection; target: Device }[];
+  onToggleConnection: (
+    toDeviceId: string,
+    connectionType: DeviceConnection["connectionType"],
+  ) => void;
+  connectionTypeResolver: (target: Device) => DeviceConnection["connectionType"];
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="text-xs font-medium text-muted-foreground">{title}</div>
+      <div className="max-h-44 overflow-y-auto space-y-1 rounded border bg-background/40 p-2">
+        {candidates.length === 0 && <div className="text-[11px] text-muted-foreground">Нет устройств</div>}
+        {candidates.map((candidate) => {
+          const active = related.some((item) => item.target.id === candidate.id);
+          return (
+            <label
+              key={candidate.id}
+              className="flex items-center gap-2 text-[11px] leading-none cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                checked={active}
+                onChange={() => onToggleConnection(candidate.id, connectionTypeResolver(candidate))}
+              />
+              <span className="truncate flex-1">
+                {candidate.name} • {candidate.ip || "без IP"}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+      {related.length > 0 && (
+        <div className="text-[11px] text-muted-foreground space-y-1">
+          {related.map(({ target, connection }) => (
+            <div key={connection.id}>
+              {target.name} • {connection.connectionType}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

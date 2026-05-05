@@ -1,7 +1,17 @@
-import type { AppData, Camera, CameraStatus, Floor, MapElement, SiteObject } from "@/types";
+import type {
+  AppData,
+  AppSettings,
+  Device,
+  DeviceConnection,
+  DeviceStatus,
+  DeviceType,
+  Floor,
+  MapElement,
+  SiteObject,
+} from "@/types";
 
 const DB_NAME = "camplan-local";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = "app-data";
 const STORAGE_KEY = "current";
 
@@ -10,7 +20,7 @@ const DEFAULT_SETTINGS: AppData["settings"] = {
   masterPasswordEncryption: "todo",
 };
 
-const statusMap: Record<string, CameraStatus> = {
+const statusMap: Record<string, DeviceStatus> = {
   working: "working",
   offline: "offline",
   needs_check: "needs_check",
@@ -102,7 +112,7 @@ async function writeRaw(value: unknown): Promise<void> {
   });
 }
 
-function normalizeSettings(input: unknown): AppData["settings"] {
+function normalizeSettings(input: unknown): AppSettings {
   const record = asRecord(input);
   return {
     theme:
@@ -162,30 +172,71 @@ function normalizeElement(input: unknown): MapElement {
   };
 }
 
-function normalizeCamera(input: unknown): Camera {
+function normalizeDeviceType(value: unknown): DeviceType {
+  return value === "nvr" || value === "dvr" || value === "switch" || value === "poe_switch"
+    ? value
+    : "camera";
+}
+
+function normalizeDevice(input: unknown): Device {
   const record = asRecord(input);
   const timestamp = asString(record.createdAt, now());
+  const type = normalizeDeviceType(record.type);
   return {
     id: asString(record.id, crypto.randomUUID()),
     floorId: asString(record.floorId, ""),
     objectId: asString(record.objectId ?? record.siteObjectId, ""),
-    name: asString(record.name, "Новая камера"),
+    type,
+    name: asString(record.name, type === "camera" ? "Новая камера" : "Новое устройство"),
     ip: asString(record.ip, ""),
     username: asString(record.username ?? record.login, "admin"),
     password: asString(record.password, ""),
-    rtspUrl: asString(record.rtspUrl ?? record.rtsp, ""),
     model: asString(record.model, ""),
     serialNumber: asString(record.serialNumber ?? record.serial, ""),
     location: asString(record.location, ""),
     status: statusMap[asString(record.status, "")] ?? "needs_check",
     notes: asString(record.notes, ""),
-    lastCheckedAt: asString(record.lastCheckedAt ?? record.lastChecked, ""),
-    responsiblePerson: asString(record.responsiblePerson ?? record.responsible, ""),
     x: asNumber(record.x, 0),
     y: asNumber(record.y, 0),
-    rotation: asNumber(record.rotation, 0),
-    fovAngle: asNumber(record.fovAngle ?? record.fov, 90),
-    fovDistance: asNumber(record.fovDistance ?? record.range, 150),
+    rotation: record.rotation === undefined ? undefined : asNumber(record.rotation, 0),
+    createdAt: String(timestamp),
+    updatedAt: asString(record.updatedAt, String(timestamp)),
+    rtspUrl: asString(record.rtspUrl ?? record.rtsp, ""),
+    fovAngle: record.fovAngle === undefined ? undefined : asNumber(record.fovAngle, 90),
+    fovDistance: record.fovDistance === undefined ? undefined : asNumber(record.fovDistance, 150),
+    channelCount:
+      record.channelCount === undefined ? undefined : asNumber(record.channelCount, 0) || 0,
+    storageCapacityTb:
+      record.storageCapacityTb === undefined
+        ? undefined
+        : asNumber(record.storageCapacityTb, 0) || 0,
+    hddCount: record.hddCount === undefined ? undefined : asNumber(record.hddCount, 0) || 0,
+    connectedCameraIds: asArray(record.connectedCameraIds).filter((item) => typeof item === "string"),
+    portCount: record.portCount === undefined ? undefined : asNumber(record.portCount, 0) || 0,
+    poePortCount:
+      record.poePortCount === undefined ? undefined : asNumber(record.poePortCount, 0) || 0,
+    poeBudgetW: record.poeBudgetW === undefined ? undefined : asNumber(record.poeBudgetW, 0) || 0,
+    uplinkPorts: record.uplinkPorts === undefined ? undefined : asNumber(record.uplinkPorts, 0) || 0,
+    connectedDeviceIds: asArray(record.connectedDeviceIds).filter((item) => typeof item === "string"),
+    lastCheckedAt: asString(record.lastCheckedAt ?? record.lastChecked, ""),
+    responsiblePerson: asString(record.responsiblePerson ?? record.responsible, ""),
+  };
+}
+
+function normalizeConnection(input: unknown): DeviceConnection {
+  const record = asRecord(input);
+  const timestamp = asString(record.createdAt, now());
+  return {
+    id: asString(record.id, crypto.randomUUID()),
+    fromDeviceId: asString(record.fromDeviceId, ""),
+    toDeviceId: asString(record.toDeviceId, ""),
+    connectionType:
+      record.connectionType === "poe" ||
+      record.connectionType === "video" ||
+      record.connectionType === "uplink"
+        ? record.connectionType
+        : "network",
+    label: typeof record.label === "string" && record.label ? record.label : undefined,
     createdAt: String(timestamp),
     updatedAt: asString(record.updatedAt, String(timestamp)),
   };
@@ -196,7 +247,8 @@ export function normalizeAppData(input: unknown): AppData {
   const rawObjects = asArray(record.objects);
   const rawFloors = asArray(record.floors);
   const rawElements = asArray(record.mapElements ?? record.elements);
-  const rawCameras = asArray(record.cameras);
+  const rawDevices = asArray(record.devices ?? record.cameras);
+  const rawConnections = asArray(record.deviceConnections ?? record.connections);
 
   const objects = rawObjects.map((item) => normalizeObject(item));
   const floors = rawFloors.map((item, index) => normalizeFloor(item, index));
@@ -204,22 +256,24 @@ export function normalizeAppData(input: unknown): AppData {
   const objectById = new Map(objects.map((object) => [object.id, object]));
 
   const mapElements = rawElements.map((item) => normalizeElement(item));
-  const cameras = rawCameras.map((item) => {
-    const camera = normalizeCamera(item);
-    if (!camera.objectId) {
-      camera.objectId = floorById.get(camera.floorId)?.objectId ?? "";
+  const devices = rawDevices.map((item) => {
+    const device = normalizeDevice(item);
+    if (!device.objectId) {
+      device.objectId = floorById.get(device.floorId)?.objectId ?? "";
     }
-    if (!camera.objectId && objectById.size > 0) {
-      camera.objectId = objects[0].id;
+    if (!device.objectId && objectById.size > 0) {
+      device.objectId = objects[0].id;
     }
-    return camera;
+    return device;
   });
+  const deviceConnections = rawConnections.map((item) => normalizeConnection(item));
 
   return {
     objects,
     floors,
     mapElements,
-    cameras,
+    devices,
+    deviceConnections,
     settings: normalizeSettings(record.settings),
   };
 }

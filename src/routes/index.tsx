@@ -4,7 +4,7 @@ import { Toolbar } from "@/components/Toolbar";
 import { Sidebar } from "@/components/Sidebar";
 import { PlanCanvas } from "@/components/PlanCanvas";
 import { PropertiesPanel } from "@/components/PropertiesPanel";
-import { useStore, statusColors, statusLabels } from "@/data/store";
+import { deviceTypeLabels, statusColors, statusLabels, useStore } from "@/data/store";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -12,7 +12,7 @@ export const Route = createFileRoute("/")({
       { title: "CCTV Manager" },
       {
         name: "description",
-        content: "Планы помещений и карточки камер видеонаблюдения для объектов.",
+        content: "Планы помещений и карточки устройств видеонаблюдения для объектов.",
       },
     ],
   }),
@@ -22,35 +22,38 @@ export const Route = createFileRoute("/")({
 function Index() {
   const [search, setSearch] = useState("");
   const [highlight, setHighlight] = useState<string | null>(null);
-  const { cameras, floors, objects, focusCamera } = useStore();
+  const { devices, floors, objects, focusDevice } = useStore();
 
   const results = useMemo(() => {
     if (!search.trim()) return [];
     const q = search.toLowerCase();
 
-    return cameras.filter((camera) => {
-      const floor = floors.find((item) => item.id === camera.floorId);
+    return devices.filter((device) => {
+      const floor = floors.find((item) => item.id === device.floorId);
       const object = objects.find(
-        (item) => item.id === camera.objectId || item.id === floor?.objectId,
+        (item) => item.id === device.objectId || item.id === floor?.objectId,
       );
-      const status = statusLabels[camera.status].toLowerCase();
+      const status = statusLabels[device.status].toLowerCase();
       return (
-        camera.name.toLowerCase().includes(q) ||
-        camera.ip.toLowerCase().includes(q) ||
-        camera.location.toLowerCase().includes(q) ||
+        device.name.toLowerCase().includes(q) ||
+        (device.ip ?? "").toLowerCase().includes(q) ||
+        deviceTypeLabels[device.type].toLowerCase().includes(q) ||
+        (device.model ?? "").toLowerCase().includes(q) ||
+        (device.location ?? "").toLowerCase().includes(q) ||
+        (device.notes ?? "").toLowerCase().includes(q) ||
         object?.name.toLowerCase().includes(q) ||
         floor?.name.toLowerCase().includes(q) ||
         status.includes(q)
       );
     });
-  }, [search, cameras, floors, objects]);
+  }, [search, devices, floors, objects]);
 
-  const objectPath = (cameraId: string) => {
-    const camera = cameras.find((item) => item.id === cameraId);
-    if (!camera) return "";
-    const floor = floors.find((item) => item.id === camera.floorId);
+  const objectPath = (deviceId: string) => {
+    const device = devices.find((item) => item.id === deviceId);
+    if (!device) return "";
+    const floor = floors.find((item) => item.id === device.floorId);
     const object = objects.find(
-      (item) => item.id === camera.objectId || item.id === floor?.objectId,
+      (item) => item.id === device.objectId || item.id === floor?.objectId,
     );
     return `${object?.name ?? "Без объекта"} / ${floor?.name ?? "Без зоны"}`;
   };
@@ -65,26 +68,28 @@ function Index() {
 
         {results.length > 0 && (
           <div className="absolute top-2 left-1/2 -translate-x-1/2 w-[460px] bg-card border rounded-md shadow-lg z-20 max-h-80 overflow-y-auto">
-            {results.map((camera) => (
+            {results.map((device) => (
               <button
-                key={camera.id}
+                key={device.id}
                 className="w-full text-left px-3 py-2 hover:bg-accent border-b last:border-0 flex items-center gap-2"
                 onClick={() => {
-                  focusCamera(camera.id);
-                  setHighlight(camera.id);
+                  focusDevice(device.id);
+                  setHighlight(device.id);
                   setSearch("");
                   window.setTimeout(() => setHighlight(null), 250);
                 }}
               >
                 <span
                   className="h-3 w-3 rounded-full shrink-0"
-                  style={{ background: statusColors[camera.status] }}
+                  style={{ background: statusColors[device.status] }}
                 />
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm truncate">{camera.name}</div>
+                  <div className="font-medium text-sm truncate">
+                    {device.name} • {deviceTypeLabels[device.type]}
+                  </div>
                   <div className="text-xs text-muted-foreground truncate">
-                    {camera.ip || "без IP"} • {objectPath(camera.id)} •{" "}
-                    {statusLabels[camera.status]}
+                    {(device.ip ?? "без IP") || "без IP"} • {objectPath(device.id)} •{" "}
+                    {statusLabels[device.status]}
                   </div>
                 </div>
               </button>

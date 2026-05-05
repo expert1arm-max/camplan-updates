@@ -4,7 +4,10 @@ import type {
   AppData,
   AppSettings,
   Camera,
-  CameraStatus,
+  Device,
+  DeviceConnection,
+  DeviceStatus,
+  DeviceType,
   EditorMode,
   Floor,
   MapElement,
@@ -17,7 +20,7 @@ interface State extends AppData {
   activeObjectId: string | null;
   activeFloorId: string | null;
   selectedId: string | null;
-  selectedKind: "camera" | "element" | null;
+  selectedKind: "device" | "element" | null;
   mode: EditorMode;
   isEditMode: boolean;
   savedAt: number;
@@ -28,11 +31,12 @@ interface State extends AppData {
   hydrate: (data: AppData) => void;
   setActiveObject: (id: string | null) => void;
   setActiveFloor: (id: string | null) => void;
+  focusDevice: (id: string) => void;
   focusCamera: (id: string) => void;
   focusElement: (id: string) => void;
   setEditMode: (enabled: boolean) => void;
   setMode: (m: EditorMode) => void;
-  select: (id: string | null, kind: "camera" | "element" | null) => void;
+  select: (id: string | null, kind: "device" | "element" | null) => void;
 
   addObject: (name: string) => void;
   renameObject: (id: string, name: string, description?: string) => void;
@@ -46,10 +50,24 @@ interface State extends AppData {
   updateElement: (id: string, patch: Partial<MapElement>) => void;
   removeElement: (id: string) => void;
 
+  addDevice: (device: Omit<Device, "id" | "createdAt" | "updatedAt">) => string;
+  updateDevice: (id: string, patch: Partial<Device>) => void;
+  removeDevice: (id: string) => void;
+  duplicateDevice: (id: string) => void;
+
   addCamera: (camera: Omit<Camera, "id" | "createdAt" | "updatedAt">) => string;
   updateCamera: (id: string, patch: Partial<Camera>) => void;
   removeCamera: (id: string) => void;
   duplicateCamera: (id: string) => void;
+
+  addDeviceConnection: (connection: Omit<DeviceConnection, "id" | "createdAt" | "updatedAt">) => void;
+  toggleDeviceConnection: (
+    fromDeviceId: string,
+    toDeviceId: string,
+    connectionType: DeviceConnection["connectionType"],
+  ) => void;
+  removeDeviceConnection: (id: string) => void;
+
   copySelected: () => void;
   pasteClipboard: () => void;
 
@@ -65,13 +83,13 @@ type EditorSnapshot = AppData & {
   activeObjectId: string | null;
   activeFloorId: string | null;
   selectedId: string | null;
-  selectedKind: "camera" | "element" | null;
+  selectedKind: "device" | "element" | null;
   mode: EditorMode;
   isEditMode: boolean;
 };
 
 type ClipboardItem =
-  | { kind: "camera"; camera: Camera }
+  | { kind: "device"; device: Device }
   | { kind: "element"; element: MapElement };
 
 let clipboardItem: ClipboardItem | null = null;
@@ -85,7 +103,8 @@ function selectData(state: State): AppData {
     objects: state.objects,
     floors: state.floors,
     mapElements: state.mapElements,
-    cameras: state.cameras,
+    devices: state.devices,
+    deviceConnections: state.deviceConnections,
     settings: state.settings,
   };
 }
@@ -95,13 +114,15 @@ function snapshotState(state: State): EditorSnapshot {
     objects: state.objects,
     floors: state.floors,
     mapElements: state.mapElements,
-    cameras: state.cameras,
+    devices: state.devices,
+    deviceConnections: state.deviceConnections,
     settings: state.settings,
     activeObjectId: state.activeObjectId,
     activeFloorId: state.activeFloorId,
     selectedId: state.selectedId,
     selectedKind: state.selectedKind,
     mode: state.mode,
+    isEditMode: state.isEditMode,
   };
 }
 
@@ -110,13 +131,15 @@ function restoreSnapshot(snapshot: EditorSnapshot) {
     objects: snapshot.objects,
     floors: snapshot.floors,
     mapElements: snapshot.mapElements,
-    cameras: snapshot.cameras,
+    devices: snapshot.devices,
+    deviceConnections: snapshot.deviceConnections,
     settings: snapshot.settings,
     activeObjectId: snapshot.activeObjectId,
     activeFloorId: snapshot.activeFloorId,
     selectedId: snapshot.selectedId,
     selectedKind: snapshot.selectedKind,
     mode: snapshot.mode,
+    isEditMode: snapshot.isEditMode,
     isHydrated: true,
     savedAt: Date.now(),
   };
@@ -190,19 +213,19 @@ function createElementRecord(
   };
 }
 
-function createCameraRecord(camera: Omit<Camera, "id" | "createdAt" | "updatedAt">): Camera {
+function createDeviceRecord(device: Omit<Device, "id" | "createdAt" | "updatedAt">): Device {
   const now = timestamp();
   return {
-    ...camera,
+    ...device,
     id: nanoid(),
     createdAt: now,
     updatedAt: now,
   };
 }
 
-function cloneCameraRecord(camera: Camera, patch: Partial<Camera> = {}): Camera {
-  const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...base } = camera;
-  return createCameraRecord({
+function cloneDeviceRecord(device: Device, patch: Partial<Device> = {}): Device {
+  const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...base } = device;
+  return createDeviceRecord({
     ...base,
     ...patch,
   });
@@ -216,7 +239,33 @@ function cloneElementRecord(element: MapElement, patch: Partial<MapElement> = {}
   });
 }
 
+function ensureObjectPlacement(devices: Device[], floors: Floor[], device: Device) {
+  if (device.objectId) return device;
+  const floor = floors.find((item) => item.id === device.floorId) ?? null;
+  return {
+    ...device,
+    objectId: floor?.objectId ?? "",
+  };
+}
+
+function removeConnectionsForDevice(
+  deviceConnections: DeviceConnection[],
+  deviceId: string,
+) {
+  return deviceConnections.filter(
+    (connection) => connection.fromDeviceId !== deviceId && connection.toDeviceId !== deviceId,
+  );
+}
+
 const initial = createDemoData();
+
+export const deviceTypeLabels: Record<DeviceType, string> = {
+  camera: "Камера",
+  nvr: "NVR",
+  dvr: "DVR",
+  switch: "Switch",
+  poe_switch: "PoE Switch",
+};
 
 export const useStore = create<State>()((set, get) => ({
   ...initial,
@@ -272,18 +321,20 @@ export const useStore = create<State>()((set, get) => ({
       };
     }),
 
-  focusCamera: (id) =>
+  focusDevice: (id) =>
     set((state) => {
-      const camera = state.cameras.find((item) => item.id === id) ?? null;
-      if (!camera) return state;
+      const device = state.devices.find((item) => item.id === id) ?? null;
+      if (!device) return state;
       return {
-        activeFloorId: camera.floorId,
-        activeObjectId: camera.objectId,
-        selectedId: camera.id,
-        selectedKind: "camera",
+        activeFloorId: device.floorId,
+        activeObjectId: device.objectId,
+        selectedId: device.id,
+        selectedKind: "device",
         mode: "select",
       };
     }),
+
+  focusCamera: (id) => get().focusDevice(id),
 
   focusElement: (id) =>
     set((state) => {
@@ -339,8 +390,12 @@ export const useStore = create<State>()((set, get) => ({
       const remainingObjects = state.objects.filter((object) => object.id !== id);
       const remainingFloors = state.floors.filter((floor) => floor.objectId !== id);
       const remainingFloorIds = new Set(remainingFloors.map((floor) => floor.id));
-      const remainingCameras = state.cameras.filter((camera) =>
-        remainingFloorIds.has(camera.floorId),
+      const remainingDevices = state.devices.filter((device) => remainingFloorIds.has(device.floorId));
+      const remainingDeviceIds = new Set(remainingDevices.map((device) => device.id));
+      const remainingConnections = state.deviceConnections.filter(
+        (connection) =>
+          remainingDeviceIds.has(connection.fromDeviceId) &&
+          remainingDeviceIds.has(connection.toDeviceId),
       );
       const nextObject = remainingObjects[0] ?? null;
       const nextFloor = nextObject
@@ -349,7 +404,8 @@ export const useStore = create<State>()((set, get) => ({
       return {
         objects: remainingObjects,
         floors: remainingFloors,
-        cameras: remainingCameras,
+        devices: remainingDevices,
+        deviceConnections: remainingConnections,
         activeObjectId: nextObject?.id ?? null,
         activeFloorId: nextFloor?.id ?? null,
         selectedId: null,
@@ -393,13 +449,19 @@ export const useStore = create<State>()((set, get) => ({
   removeFloor: (id) => {
     mutate(set, get, (state) => {
       const floors = state.floors.filter((floor) => floor.id !== id);
-      const cameras = state.cameras.filter((camera) => camera.floorId !== id);
+      const devices = state.devices.filter((device) => device.floorId !== id);
+      const deviceIds = new Set(devices.map((device) => device.id));
+      const deviceConnections = state.deviceConnections.filter(
+        (connection) =>
+          deviceIds.has(connection.fromDeviceId) && deviceIds.has(connection.toDeviceId),
+      );
       const mapElements = state.mapElements.filter((element) => element.floorId !== id);
       const nextFloor =
         floors.find((floor) => floor.objectId === state.activeObjectId) ?? floors[0] ?? null;
       return {
         floors,
-        cameras,
+        devices,
+        deviceConnections,
         mapElements,
         activeFloorId: nextFloor?.id ?? null,
         activeObjectId: nextFloor?.objectId ?? state.activeObjectId ?? null,
@@ -433,48 +495,111 @@ export const useStore = create<State>()((set, get) => ({
     }));
   },
 
-  addCamera: (camera) => {
-    const next = createCameraRecord(camera);
+  addDevice: (device) => {
+    const next = ensureObjectPlacement(
+      get().devices,
+      get().floors,
+      createDeviceRecord(device),
+    );
     mutate(set, get, (state) => ({
-      cameras: [...state.cameras, next],
+      devices: [...state.devices, next],
       selectedId: next.id,
-      selectedKind: "camera",
+      selectedKind: "device",
     }));
     return next.id;
   },
 
-  updateCamera: (id, patch) => {
+  updateDevice: (id, patch) => {
     mutate(set, get, (state) => ({
-      cameras: updateList(state.cameras, id, patch),
+      devices: updateList(state.devices, id, patch),
     }));
   },
 
-  removeCamera: (id) => {
+  removeDevice: (id) => {
     mutate(set, get, (state) => ({
-      cameras: state.cameras.filter((camera) => camera.id !== id),
+      devices: state.devices.filter((device) => device.id !== id),
+      deviceConnections: removeConnectionsForDevice(state.deviceConnections, id),
       selectedId: state.selectedId === id ? null : state.selectedId,
       selectedKind: state.selectedId === id ? null : state.selectedKind,
     }));
   },
 
-  duplicateCamera: (id) => {
-    const cam = get().cameras.find((item) => item.id === id);
-    if (!cam) return;
-    const copy = cloneCameraRecord(cam, {
-      name: `${cam.name} (копия)`,
-      x: cam.x + 30,
-      y: cam.y + 30,
+  duplicateDevice: (id) => {
+    const device = get().devices.find((item) => item.id === id);
+    if (!device) return;
+    const copy = cloneDeviceRecord(device, {
+      name: `${device.name} (копия)`,
+      x: device.x + 30,
+      y: device.y + 30,
     });
     mutate(set, get, (state) => ({
-      cameras: [...state.cameras, copy],
+      devices: [...state.devices, copy],
+    }));
+  },
+
+  addCamera: (camera) =>
+    get().addDevice({
+      ...camera,
+      type: "camera",
+    }),
+
+  updateCamera: (id, patch) => get().updateDevice(id, patch),
+  removeCamera: (id) => get().removeDevice(id),
+  duplicateCamera: (id) => get().duplicateDevice(id),
+
+  addDeviceConnection: (connection) => {
+    mutate(set, get, (state) => ({
+      deviceConnections: [
+        ...state.deviceConnections,
+        {
+          ...connection,
+          id: nanoid(),
+          createdAt: timestamp(),
+          updatedAt: timestamp(),
+        },
+      ],
+    }));
+  },
+
+  toggleDeviceConnection: (fromDeviceId, toDeviceId, connectionType) => {
+    mutate(set, get, (state) => {
+      const existing = state.deviceConnections.find(
+        (connection) =>
+          connection.fromDeviceId === fromDeviceId && connection.toDeviceId === toDeviceId,
+      );
+      if (existing) {
+        return {
+          deviceConnections: state.deviceConnections.filter((connection) => connection.id !== existing.id),
+        };
+      }
+
+      return {
+        deviceConnections: [
+          ...state.deviceConnections,
+          {
+            id: nanoid(),
+            fromDeviceId,
+            toDeviceId,
+            connectionType,
+            createdAt: timestamp(),
+            updatedAt: timestamp(),
+          },
+        ],
+      };
+    });
+  },
+
+  removeDeviceConnection: (id) => {
+    mutate(set, get, (state) => ({
+      deviceConnections: state.deviceConnections.filter((connection) => connection.id !== id),
     }));
   },
 
   copySelected: () => {
     const state = get();
-    if (state.selectedKind === "camera" && state.selectedId) {
-      const camera = state.cameras.find((item) => item.id === state.selectedId);
-      clipboardItem = camera ? { kind: "camera", camera } : null;
+    if (state.selectedKind === "device" && state.selectedId) {
+      const device = state.devices.find((item) => item.id === state.selectedId);
+      clipboardItem = device ? { kind: "device", device } : null;
       return;
     }
 
@@ -491,9 +616,9 @@ export const useStore = create<State>()((set, get) => ({
     const state = get();
     if (!clipboardItem) return;
 
-    if (clipboardItem.kind === "camera") {
-      const source = clipboardItem.camera;
-      const copy = cloneCameraRecord(source, {
+    if (clipboardItem.kind === "device") {
+      const source = clipboardItem.device;
+      const copy = cloneDeviceRecord(source, {
         floorId: state.activeFloorId ?? source.floorId,
         objectId: state.activeObjectId ?? source.objectId,
         name: `${source.name} (копия)`,
@@ -501,9 +626,9 @@ export const useStore = create<State>()((set, get) => ({
         y: source.y + 30,
       });
       mutate(set, get, (current) => ({
-        cameras: [...current.cameras, copy],
+        devices: [...current.devices, copy],
         selectedId: copy.id,
-        selectedKind: "camera",
+        selectedKind: "device",
       }));
       return;
     }
@@ -598,7 +723,7 @@ export async function bootstrapStore() {
   await saveAppData(demo);
 }
 
-export const statusLabels: Record<CameraStatus, string> = {
+export const statusLabels: Record<DeviceStatus, string> = {
   working: "Работает",
   offline: "Не работает",
   needs_check: "Требует проверки",
@@ -606,7 +731,7 @@ export const statusLabels: Record<CameraStatus, string> = {
   no_access: "Нет доступа",
 };
 
-export const statusColors: Record<CameraStatus, string> = {
+export const statusColors: Record<DeviceStatus, string> = {
   working: "#16a34a",
   offline: "#dc2626",
   needs_check: "#eab308",

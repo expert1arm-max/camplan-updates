@@ -1,24 +1,27 @@
 import { Link } from "@tanstack/react-router";
 import {
-  MousePointer2,
-  Square,
-  Minus,
-  DoorOpen,
-  Type,
-  Camera as CamIcon,
-  Trash2,
-  Download,
-  Upload,
-  Search,
-  Table2,
-  RotateCcw,
-  Pencil,
-  Eye,
+  Camera,
   Check,
+  Download,
+  DoorOpen,
+  Eye,
+  Network,
+  Pencil,
+  Minus,
+  Search,
+  Server,
+  Square,
+  Type,
+  Trash2,
+  Upload,
+  Wifi,
+  RotateCcw,
+  Table2,
+  Zap,
 } from "lucide-react";
 import { useRef, useState } from "react";
-import { useStore } from "@/data/store";
-import type { EditorMode } from "@/types";
+import { useStore, deviceTypeLabels } from "@/data/store";
+import type { DeviceType, EditorMode } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -37,12 +40,16 @@ declare global {
 }
 
 const tools: { mode: EditorMode; icon: typeof Square; label: string }[] = [
-  { mode: "select", icon: MousePointer2, label: "Выбор" },
+  { mode: "select", icon: Eye, label: "Выбор" },
   { mode: "room", icon: Square, label: "Комната" },
   { mode: "wall", icon: Minus, label: "Стена" },
   { mode: "door", icon: DoorOpen, label: "Дверь" },
   { mode: "text", icon: Type, label: "Текст" },
-  { mode: "camera", icon: CamIcon, label: "Камера" },
+  { mode: "camera", icon: Camera, label: "Камера" },
+  { mode: "nvr", icon: Server, label: "NVR" },
+  { mode: "dvr", icon: Network, label: "DVR" },
+  { mode: "switch", icon: Wifi, label: "Switch" },
+  { mode: "poe_switch", icon: Zap, label: "PoE Switch" },
   { mode: "delete", icon: Trash2, label: "Удалить" },
 ];
 
@@ -79,9 +86,9 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
   };
 
   const handleExportCsv = async () => {
-    const { cameras, floors, objects } = useStore.getState();
-    const csv = buildCameraCsv(cameras, floors, objects);
-    await saveFile(`cctv-cameras-${Date.now()}.csv`, csv, [{ name: "CSV", extensions: ["csv"] }]);
+    const { devices, floors, objects } = useStore.getState();
+    const csv = buildDeviceCsv(devices, floors, objects);
+    await saveFile(`cctv-devices-${Date.now()}.csv`, csv, [{ name: "CSV", extensions: ["csv"] }]);
   };
 
   const handleImport = async () => {
@@ -154,14 +161,14 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Поиск камеры: имя, IP, объект, зона, статус"
+          placeholder="Поиск устройств: имя, IP, тип, объект, зона, статус"
           className="h-9 pl-8"
         />
       </div>
 
       <Link to="/cameras">
         <Button variant="outline" size="sm">
-          <Table2 className="h-4 w-4 mr-1" /> Все камеры
+          <Table2 className="h-4 w-4 mr-1" /> Все устройства
         </Button>
       </Link>
 
@@ -230,39 +237,43 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
   );
 }
 
-function buildCameraCsv(
-  cameras: ReturnType<typeof useStore.getState>["cameras"],
+function buildDeviceCsv(
+  devices: ReturnType<typeof useStore.getState>["devices"],
   floors: ReturnType<typeof useStore.getState>["floors"],
   objects: ReturnType<typeof useStore.getState>["objects"],
 ) {
   const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
   const headers = [
+    "type",
     "name",
     "ip",
     "object",
     "zone",
     "status",
+    "model",
     "username",
     "password",
     "lastCheckedAt",
     "notes",
   ];
 
-  const rows = cameras.map((camera) => {
-    const floor = floors.find((item) => item.id === camera.floorId);
+  const rows = devices.map((device) => {
+    const floor = floors.find((item) => item.id === device.floorId);
     const object = objects.find(
-      (item) => item.id === camera.objectId || item.id === floor?.objectId,
+      (item) => item.id === device.objectId || item.id === floor?.objectId,
     );
     return [
-      camera.name,
-      camera.ip,
+      deviceTypeLabels[device.type],
+      device.name,
+      device.ip ?? "",
       object?.name ?? "",
       floor?.name ?? "",
-      camera.status,
-      camera.username,
-      camera.password ? "******" : "",
-      camera.lastCheckedAt,
-      camera.notes,
+      device.status,
+      device.model ?? "",
+      device.username ?? "",
+      device.password ? "******" : "",
+      device.lastCheckedAt ?? "",
+      device.notes ?? "",
     ]
       .map(escape)
       .join(",");
