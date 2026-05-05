@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Copy, Eye, EyeOff, Files, Lock, Trash2 } from "lucide-react";
+import { Copy, Eye, EyeOff, Files, Lock, Pin, PinOff, Trash2 } from "lucide-react";
 import { deviceTypeLabels, statusLabels, useStore } from "@/data/store";
 import type { CableType, Device, DeviceConnection, DeviceStatus, DeviceType, MapElement } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -32,8 +32,16 @@ const cableDefaultColors: Record<CableType, string> = {
 };
 const quickColors = [...ROOM_PRESET_COLORS];
 
-export function PropertiesPanel() {
+export function PropertiesPanel({
+  rightPinned,
+  onToggleRightPin,
+}: {
+  rightPinned: boolean;
+  onToggleRightPin: () => void;
+}) {
   const {
+    objects,
+    activeObjectId,
     selectedId,
     selectedKind,
     isEditMode,
@@ -45,6 +53,7 @@ export function PropertiesPanel() {
     updateDeviceConnection,
     updateElement,
     updateSettings,
+    renameObject,
     removeDevice,
     duplicateDevice,
     removeDeviceConnection,
@@ -52,18 +61,42 @@ export function PropertiesPanel() {
     toggleDeviceConnection,
   } = useStore();
 
+  const activeObject = objects.find((item) => item.id === activeObjectId) ?? null;
+
   if (!selectedId || !selectedKind) {
     return (
       <aside className="w-80 border-l bg-card p-4 text-sm text-muted-foreground overflow-y-auto">
-        Выберите устройство или элемент на плане, чтобы редактировать его свойства.
-        <div className="mt-4 space-y-2 text-xs">
-          <div className="font-semibold text-foreground">Подсказки:</div>
-          <div>• Двойной клик по устройству — открыть карточку</div>
-          <div>• Перетаскивайте элементы мышкой</div>
-          <div>• Синяя точка возле камеры — поворот</div>
-          <div>• Delete — удалить выбранное</div>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="font-semibold text-foreground">Выберите объект или устройство</div>
+            <div className="mt-1 text-xs leading-5">
+              Кликните по объекту, камере, кабелю или элементу плана, чтобы открыть карточку.
+            </div>
+          </div>
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onToggleRightPin}>
+            {rightPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+          </Button>
         </div>
-      </aside>
+        {rightPinned && (
+          <div className="mt-4 rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            Панель закреплена и останется открытой после клика по пустому месту.
+          </div>
+        )}
+        </aside>
+    );
+  }
+
+  if (selectedKind === "object") {
+    if (!activeObject) return null;
+    return (
+      <ObjectPanel
+        object={activeObject}
+        canEdit={isEditMode}
+        onEnterEditMode={() => setEditMode(true)}
+        onUpdate={(name, description) => renameObject(activeObject.id, name, description)}
+        onTogglePin={onToggleRightPin}
+        pinned={rightPinned}
+      />
     );
   }
 
@@ -80,6 +113,8 @@ export function PropertiesPanel() {
         onUpdate={(patch) => updateDevice(device.id, patch)}
         onDelete={() => removeDevice(device.id)}
         onDup={() => duplicateDevice(device.id)}
+        onTogglePin={onToggleRightPin}
+        pinned={rightPinned}
         onToggleConnection={(toDeviceId, connectionType) =>
           toggleDeviceConnection(device.id, toDeviceId, connectionType)
         }
@@ -98,6 +133,8 @@ export function PropertiesPanel() {
         onEnterEditMode={() => setEditMode(true)}
         onUpdate={(patch) => updateDeviceConnection(connection.id, patch)}
         onDelete={() => removeDeviceConnection(connection.id)}
+        onTogglePin={onToggleRightPin}
+        pinned={rightPinned}
       />
     );
   }
@@ -112,7 +149,75 @@ export function PropertiesPanel() {
       onUpdate={(patch) => updateElement(element.id, patch)}
       onPresetColorChange={(color) => updateSettings({ roomColorPreset: color })}
       onDelete={() => removeElement(element.id)}
+      onTogglePin={onToggleRightPin}
+      pinned={rightPinned}
     />
+  );
+}
+
+function ObjectPanel({
+  object,
+  canEdit,
+  onEnterEditMode,
+  onUpdate,
+  onTogglePin,
+  pinned,
+}: {
+  object: { id: string; name: string; description?: string };
+  canEdit: boolean;
+  onEnterEditMode: () => void;
+  onUpdate: (name: string, description?: string) => void;
+  onTogglePin: () => void;
+  pinned: boolean;
+}) {
+  const { floors, activeFloorId, activeObjectId } = useStore();
+  const floorCount = floors.filter((floor) => floor.objectId === object.id).length;
+  const activeFloor = floors.find((floor) => floor.id === activeFloorId) ?? null;
+
+  return (
+    <aside className="w-80 border-l bg-card overflow-y-auto">
+      <div className="p-3 border-b flex items-center justify-between">
+        <div className="font-semibold text-sm flex items-center gap-2 truncate">
+          <span>Выбран: Объект — {object.name}</span>
+        </div>
+        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onTogglePin}>
+          {pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+        </Button>
+      </div>
+      {!canEdit && (
+        <div className="px-3 pt-3">
+          <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground flex items-center justify-between gap-2">
+            <span>Объект доступен только в режиме редактирования.</span>
+            <Button size="sm" variant="outline" className="h-7" onClick={onEnterEditMode}>
+              Редактировать
+            </Button>
+          </div>
+        </div>
+      )}
+      <div className="p-3 space-y-3 text-xs">
+        <Field label="Название объекта">
+          <Input
+            value={object.name}
+            onChange={(e) => onUpdate(e.target.value, object.description)}
+            className="h-8"
+            disabled={!canEdit}
+          />
+        </Field>
+        <Field label="Описание">
+          <Textarea
+            value={object.description ?? ""}
+            onChange={(e) => onUpdate(object.name, e.target.value)}
+            rows={4}
+            disabled={!canEdit}
+          />
+        </Field>
+        <div className="rounded-md border bg-background/40 p-2 text-xs space-y-1">
+          <div>Зон: {floorCount}</div>
+          <div>Активный объект: {activeObjectId === object.id ? "Да" : "Нет"}</div>
+          <div>Активная зона: {activeFloor?.name ?? "Не выбрана"}</div>
+        </div>
+      </div>
+    </aside>
   );
 }
 
@@ -126,6 +231,8 @@ function DevicePanel({
   onDelete,
   onDup,
   onToggleConnection,
+  onTogglePin,
+  pinned,
 }: {
   device: Device;
   canEdit: boolean;
@@ -139,6 +246,8 @@ function DevicePanel({
     toDeviceId: string,
     cableType: CableType,
   ) => void;
+  onTogglePin: () => void;
+  pinned: boolean;
 }) {
   const [showPwd, setShowPwd] = useState(false);
   const copy = (value: string) => navigator.clipboard.writeText(value);
@@ -168,33 +277,38 @@ function DevicePanel({
 
   return (
     <aside className="w-80 border-l bg-card overflow-y-auto">
-      <div className="p-3 border-b sticky top-0 bg-card flex items-center justify-between z-10">
+      <div className="p-3 border-b sticky top-0 bg-card flex items-center justify-between gap-2 z-10">
         <div className="font-semibold text-sm truncate flex items-center gap-2">
           <span>Выбран: {device.name || "Устройство"}</span>
           {device.locked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
         </div>
-        {canEdit && (
-          <div className="flex gap-1">
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7"
-              onClick={onDup}
-              title="Дублировать"
-            >
-              <Files className="h-4 w-4" />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7"
-              onClick={onDelete}
-              title="Удалить"
-            >
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center gap-1">
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onTogglePin}>
+            {pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+          </Button>
+          {canEdit && (
+            <div className="flex gap-1">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                onClick={onDup}
+                title="Дублировать"
+              >
+                <Files className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                onClick={onDelete}
+                title="Удалить"
+              >
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
       {!canEdit && (
@@ -626,6 +740,8 @@ function ConnectionPanel({
   onEnterEditMode,
   onUpdate,
   onDelete,
+  onTogglePin,
+  pinned,
 }: {
   connection: DeviceConnection;
   canEdit: boolean;
@@ -633,6 +749,8 @@ function ConnectionPanel({
   onEnterEditMode: () => void;
   onUpdate: (p: Partial<DeviceConnection>) => void;
   onDelete: () => void;
+  onTogglePin: () => void;
+  pinned: boolean;
 }) {
   const fromName = devices.find((item) => item.id === connection.from.deviceId)?.name ?? "Точка A";
   const toName = devices.find((item) => item.id === connection.to.deviceId)?.name ?? "Точка B";
@@ -666,16 +784,21 @@ function ConnectionPanel({
 
   return (
     <aside className="w-80 border-l bg-card overflow-y-auto">
-      <div className="p-3 border-b flex items-center justify-between">
+      <div className="p-3 border-b flex items-center justify-between gap-2">
         <div className="font-semibold text-sm flex items-center gap-2">
           <span>Выбран: Кабель</span>
           {connection.locked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
         </div>
-        {canEdit && (
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onDelete}>
-            <Trash2 className="h-4 w-4 text-destructive" />
+        <div className="flex items-center gap-1">
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onTogglePin}>
+            {pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
           </Button>
-        )}
+          {canEdit && (
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onDelete}>
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          )}
+        </div>
       </div>
       {!canEdit && (
         <div className="px-3 pt-3">
@@ -773,6 +896,8 @@ function ElementPanel({
   onUpdate,
   onPresetColorChange,
   onDelete,
+  onTogglePin,
+  pinned,
 }: {
   el: MapElement;
   canEdit: boolean;
@@ -780,21 +905,28 @@ function ElementPanel({
   onUpdate: (p: Partial<MapElement>) => void;
   onPresetColorChange: (color: string) => void;
   onDelete: () => void;
+  onTogglePin: () => void;
+  pinned: boolean;
 }) {
   return (
     <aside className="w-80 border-l bg-card overflow-y-auto">
-      <div className="p-3 border-b flex items-center justify-between">
+      <div className="p-3 border-b flex items-center justify-between gap-2">
         <div className="font-semibold text-sm flex items-center gap-2">
           <span>
             Выбран: Элемент — {el.type === "room" ? "Помещение" : el.type === "wall" ? "Стена" : el.type === "door" ? "Дверь" : "Текст"}
           </span>
           {el.locked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
         </div>
-        {canEdit && (
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onDelete}>
-            <Trash2 className="h-4 w-4 text-destructive" />
+        <div className="flex items-center gap-1">
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onTogglePin}>
+            {pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
           </Button>
-        )}
+          {canEdit && (
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onDelete}>
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          )}
+        </div>
       </div>
       {!canEdit && (
         <div className="px-3 pt-3">

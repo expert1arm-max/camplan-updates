@@ -14,7 +14,7 @@ export function Sidebar() {
     activeObjectId,
     activeFloorId,
     isEditMode,
-    setActiveObject,
+    focusObject,
     setActiveFloor,
     addObject,
     addFloor,
@@ -81,7 +81,7 @@ export function Sidebar() {
                 <button
                   type="button"
                   onClick={() => {
-                    setActiveObject(object.id);
+                    focusObject(object.id);
                     setOpen((current) => ({ ...current, [object.id]: !isOpen }));
                   }}
                   className={cn(
@@ -237,7 +237,7 @@ export function Sidebar() {
               <button
                 type="button"
                 onClick={() => {
-                  setActiveObject(object.id);
+                  focusObject(object.id);
                   setOpen((current) => ({ ...current, [object.id]: !isOpen }));
                 }}
                 className={cn(

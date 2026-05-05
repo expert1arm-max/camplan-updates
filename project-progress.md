@@ -52,3 +52,7 @@
 
 - Toolbar project actions moved into a File dropdown.
 - Left and right panel collapse controls now sit above their respective panels.
+
+- Object selection now opens the right properties panel; blank canvas clicks clear selection and close it unless the panel is pinned.
+- Left and right collapsed headers now show only the arrow when collapsed.
+- Right properties panel has a pin toggle that keeps it open after deselection.

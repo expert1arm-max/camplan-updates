@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Toolbar } from "@/components/Toolbar";
 import { Sidebar } from "@/components/Sidebar";
@@ -26,7 +26,20 @@ function Index() {
   const [highlight, setHighlight] = useState<string | null>(null);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [rightPinned, setRightPinned] = useState(false);
   const { devices, floors, objects, focusDevice } = useStore();
+  const { selectedId, selectedKind } = useStore();
+
+  useEffect(() => {
+    if (selectedId && selectedKind) {
+      setRightCollapsed(false);
+      return;
+    }
+
+    if (!rightPinned) {
+      setRightCollapsed(true);
+    }
+  }, [selectedId, selectedKind, rightPinned]);
 
   const results = useMemo(() => {
     if (!search.trim()) return [];
@@ -64,25 +77,18 @@ function Index() {
 
   return (
     <div className="h-screen flex flex-col bg-background">
-      <Toolbar
-        search={search}
-        setSearch={setSearch}
-      />
+      <Toolbar search={search} setSearch={setSearch} />
       <div className="flex-1 flex overflow-hidden relative">
         <div className="flex h-full flex-col overflow-hidden">
           <div className="border-r bg-card p-2">
             <Button
               variant="outline"
               size="sm"
-              className="h-7 w-full justify-start"
+              className={`h-7 ${leftCollapsed ? "w-7 justify-center px-0" : "w-full justify-start"}`}
               onClick={() => setLeftCollapsed((value) => !value)}
             >
-              {leftCollapsed ? (
-                <ChevronRight className="h-4 w-4 mr-1" />
-              ) : (
-                <ChevronLeft className="h-4 w-4 mr-1" />
-              )}
-              {leftCollapsed ? "Показать левое меню" : "Скрыть левое меню"}
+              {leftCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4 mr-1" />}
+              {!leftCollapsed && "Скрыть левое меню"}
             </Button>
           </div>
           {!leftCollapsed && <Sidebar />}
@@ -93,18 +99,19 @@ function Index() {
             <Button
               variant="outline"
               size="sm"
-              className="h-7 w-full justify-start"
+              className={`h-7 ${rightCollapsed ? "w-7 justify-center px-0" : "w-full justify-start"}`}
               onClick={() => setRightCollapsed((value) => !value)}
             >
-              {rightCollapsed ? (
-                <ChevronLeft className="h-4 w-4 mr-1" />
-              ) : (
-                <ChevronRight className="h-4 w-4 mr-1" />
-              )}
-              {rightCollapsed ? "Показать правое меню" : "Скрыть правое меню"}
+              {rightCollapsed ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4 mr-1" />}
+              {!rightCollapsed && "Скрыть правое меню"}
             </Button>
           </div>
-          {!rightCollapsed && <PropertiesPanel />}
+          {!rightCollapsed && (
+            <PropertiesPanel
+              rightPinned={rightPinned}
+              onToggleRightPin={() => setRightPinned((value) => !value)}
+            />
+          )}
         </div>
 
         {results.length > 0 && (

@@ -34,3 +34,7 @@ MVP desktop-версии собран и упаковывается.
 
 - Verify the File menu flow for project open/save and image export.
 - Verify panel collapse buttons stay attached above the left and right menus.
+
+- Verify object selection opens the right panel and blank-canvas clicks close it.
+- Verify pin keeps the right panel open after deselection.
+- Verify collapsed left/right headers render arrow-only state.

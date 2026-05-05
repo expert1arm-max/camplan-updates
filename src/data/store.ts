@@ -23,7 +23,7 @@ interface State extends AppData {
   activeObjectId: string | null;
   activeFloorId: string | null;
   selectedId: string | null;
-  selectedKind: "device" | "element" | "connection" | null;
+  selectedKind: "object" | "device" | "element" | "connection" | null;
   mode: EditorMode;
   isEditMode: boolean;
   currentCableType: CableType;
@@ -33,15 +33,15 @@ interface State extends AppData {
   future: EditorSnapshot[];
 
   hydrate: (data: AppData) => void;
-  setActiveObject: (id: string | null) => void;
   setActiveFloor: (id: string | null) => void;
+  focusObject: (id: string) => void;
   focusDevice: (id: string) => void;
   focusCamera: (id: string) => void;
   focusElement: (id: string) => void;
   setEditMode: (enabled: boolean) => void;
   setMode: (m: EditorMode) => void;
   setCableType: (type: CableType) => void;
-  select: (id: string | null, kind: "device" | "element" | "connection" | null) => void;
+  select: (id: string | null, kind: "object" | "device" | "element" | "connection" | null) => void;
   focusConnection: (id: string) => void;
 
   addObject: (name: string) => void;
@@ -90,7 +90,7 @@ type EditorSnapshot = AppData & {
   activeObjectId: string | null;
   activeFloorId: string | null;
   selectedId: string | null;
-  selectedKind: "device" | "element" | "connection" | null;
+  selectedKind: "object" | "device" | "element" | "connection" | null;
   mode: EditorMode;
   isEditMode: boolean;
 };
@@ -344,20 +344,6 @@ export const useStore = create<State>()((set, get) => ({
       future: [],
     })),
 
-  setActiveObject: (id) =>
-    set((state) => {
-      const object = state.objects.find((item) => item.id === id) ?? null;
-      const floor = object
-        ? (state.floors.find((item) => item.objectId === object.id) ?? null)
-        : null;
-      return {
-        activeObjectId: object?.id ?? null,
-        activeFloorId: floor?.id ?? null,
-        selectedId: null,
-        selectedKind: null,
-      };
-    }),
-
   setActiveFloor: (id) =>
     set((state) => {
       const floor = state.floors.find((item) => item.id === id) ?? null;
@@ -366,6 +352,20 @@ export const useStore = create<State>()((set, get) => ({
         activeObjectId: floor?.objectId ?? null,
         selectedId: null,
         selectedKind: null,
+      };
+    }),
+
+  focusObject: (id) =>
+    set((state) => {
+      const object = state.objects.find((item) => item.id === id) ?? null;
+      if (!object) return state;
+      const floor = state.floors.find((item) => item.objectId === object.id) ?? null;
+      return {
+        activeObjectId: object.id,
+        activeFloorId: floor?.id ?? null,
+        selectedId: object.id,
+        selectedKind: "object",
+        mode: "select",
       };
     }),
 
