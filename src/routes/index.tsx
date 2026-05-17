@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Toolbar } from "@/components/Toolbar";
 import { Sidebar } from "@/components/Sidebar";
@@ -24,22 +24,62 @@ export const Route = createFileRoute("/")({
 function Index() {
   const [search, setSearch] = useState("");
   const [highlight, setHighlight] = useState<string | null>(null);
-  const [leftCollapsed, setLeftCollapsed] = useState(false);
-  const [rightCollapsed, setRightCollapsed] = useState(false);
-  const [rightPinned, setRightPinned] = useState(false);
-  const { devices, floors, objects, focusDevice } = useStore();
-  const { selectedId, selectedKind } = useStore();
+  const hasAppliedPanelStateRef = useRef(false);
+  const {
+    devices,
+    floors,
+    objects,
+    focusDevice,
+    selectedId,
+    selectedKind,
+    settings,
+    isHydrated,
+    updateUiState,
+  } = useStore();
+  const uiState = settings.uiState;
+  const [leftCollapsed, setLeftCollapsed] = useState(uiState?.leftCollapsed ?? false);
+  const [rightCollapsed, setRightCollapsed] = useState(uiState?.rightCollapsed ?? false);
+  const [rightPinned, setRightPinned] = useState(uiState?.rightPinned ?? false);
 
   useEffect(() => {
+    if (!isHydrated) return;
+    setLeftCollapsed(uiState?.leftCollapsed ?? false);
+    setRightCollapsed(uiState?.rightCollapsed ?? false);
+    setRightPinned(uiState?.rightPinned ?? false);
+  }, [isHydrated, uiState?.leftCollapsed, uiState?.rightCollapsed, uiState?.rightPinned]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    if (!hasAppliedPanelStateRef.current) {
+      hasAppliedPanelStateRef.current = true;
+      return;
+    }
     if (selectedId && selectedKind) {
       setRightCollapsed(false);
+      updateUiState({ rightCollapsed: false });
       return;
     }
 
     if (!rightPinned) {
       setRightCollapsed(true);
+      updateUiState({ rightCollapsed: true });
     }
-  }, [selectedId, selectedKind, rightPinned]);
+  }, [isHydrated, selectedId, selectedKind, rightPinned, updateUiState]);
+
+  const handleLeftCollapsed = (value: boolean) => {
+    setLeftCollapsed(value);
+    updateUiState({ leftCollapsed: value });
+  };
+
+  const handleRightCollapsed = (value: boolean) => {
+    setRightCollapsed(value);
+    updateUiState({ rightCollapsed: value });
+  };
+
+  const handleRightPinned = (value: boolean) => {
+    setRightPinned(value);
+    updateUiState({ rightPinned: value });
+  };
 
   const results = useMemo(() => {
     if (!search.trim()) return [];
@@ -78,42 +118,62 @@ function Index() {
   return (
     <div className="h-screen flex flex-col bg-background">
       <Toolbar search={search} setSearch={setSearch} />
-      <div className="flex-1 relative overflow-hidden">
-        <PlanCanvas highlightId={highlight} />
+      <div className="flex-1 min-h-0 relative overflow-hidden">
+        <PlanCanvas highlightId={highlight} rightPinned={rightPinned} />
 
         <div className="pointer-events-none absolute inset-0 z-20">
-          <div className="absolute left-0 top-0 h-full pointer-events-auto">
-            <div className="border-r bg-card/95 backdrop-blur-sm p-2">
+          <div
+            data-plan-left-panel
+            className="absolute left-0 top-0 h-full pointer-events-auto flex flex-col"
+          >
+            <div className="border-r bg-card/95 backdrop-blur-sm p-2 shrink-0">
               <Button
                 variant="outline"
                 size="sm"
                 className={`h-7 ${leftCollapsed ? "w-7 justify-center px-0" : "w-full justify-start"}`}
-                onClick={() => setLeftCollapsed((value) => !value)}
+                onClick={() => handleLeftCollapsed(!leftCollapsed)}
               >
-                {leftCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4 mr-1" />}
+                {leftCollapsed ? (
+                  <ChevronRight className="h-4 w-4" />
+                ) : (
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                )}
                 {!leftCollapsed && "Скрыть левое меню"}
               </Button>
             </div>
-            {!leftCollapsed && <Sidebar />}
+            {!leftCollapsed && (
+              <div className="flex-1 min-h-0">
+                <Sidebar />
+              </div>
+            )}
           </div>
 
-          <div className="absolute right-0 top-0 h-full pointer-events-auto">
-            <div className="border-l bg-card/95 backdrop-blur-sm p-2">
+          <div
+            data-plan-right-panel
+            className="absolute right-0 top-0 h-full pointer-events-auto flex flex-col"
+          >
+            <div className="border-l bg-card/95 backdrop-blur-sm p-2 shrink-0">
               <Button
                 variant="outline"
                 size="sm"
                 className={`h-7 ${rightCollapsed ? "w-7 justify-center px-0" : "w-full justify-start"}`}
-                onClick={() => setRightCollapsed((value) => !value)}
+                onClick={() => handleRightCollapsed(!rightCollapsed)}
               >
-                {rightCollapsed ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4 mr-1" />}
+                {rightCollapsed ? (
+                  <ChevronLeft className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 mr-1" />
+                )}
                 {!rightCollapsed && "Скрыть правое меню"}
               </Button>
             </div>
             {!rightCollapsed && (
-              <PropertiesPanel
-                rightPinned={rightPinned}
-                onToggleRightPin={() => setRightPinned((value) => !value)}
-              />
+              <div className="flex-1 min-h-0">
+                <PropertiesPanel
+                  rightPinned={rightPinned}
+                  onToggleRightPin={() => handleRightPinned(!rightPinned)}
+                />
+              </div>
             )}
           </div>
         </div>

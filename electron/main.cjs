@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const http = require("node:http");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
@@ -33,6 +34,7 @@ async function startProductionServer() {
       const origin = `http://${req.headers.host || "127.0.0.1"}`;
       const url = new URL(req.url || "/", origin);
       const headers = new Headers();
+
       for (const [key, value] of Object.entries(req.headers)) {
         if (typeof value === "string") {
           headers.set(key, value);
@@ -42,8 +44,10 @@ async function startProductionServer() {
       }
 
       const pathname = url.pathname;
+
       if (pathname.startsWith("/assets/") || pathname === "/.assetsignore") {
         const assetPath = path.join(clientDir, pathname.slice(1));
+
         try {
           const buffer = await fs.readFile(assetPath);
           res.statusCode = 200;
@@ -61,10 +65,12 @@ async function startProductionServer() {
         method: req.method,
         headers,
       });
+
       const response = await worker.fetch(request, {}, { waitUntil() {} });
 
       res.statusCode = response.status;
       response.headers.forEach((value, key) => res.setHeader(key, value));
+
       if (!response.body) {
         res.end();
         return;
@@ -81,6 +87,7 @@ async function startProductionServer() {
   await new Promise((resolve) => {
     server.listen(0, "127.0.0.1", resolve);
   });
+
   return server.address().port;
 }
 
@@ -127,6 +134,13 @@ app.whenReady().then(() => {
     return fs.readFile(result.filePaths[0], "utf-8");
   });
 
+  ipcMain.handle("shell:open-external", async (_event, url) => {
+    const target = String(url ?? "").trim();
+    if (!target) return false;
+    await shell.openExternal(target);
+    return true;
+  });
+
   ipcMain.handle("dialog:save-text", async (_event, payload) => {
     const result = await dialog.showSaveDialog({
       defaultPath: payload?.defaultPath ?? "export.txt",
@@ -154,11 +168,16 @@ app.whenReady().then(() => {
     const dataUrl = String(payload?.dataUrl ?? "");
     const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : "";
     if (!base64) return false;
+
     await fs.writeFile(result.filePath, Buffer.from(base64, "base64"));
     return true;
   });
 
   void createWindow();
+
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdatesAndNotify();
+  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -171,6 +190,7 @@ app.on("window-all-closed", () => {
   if (server) {
     server.close();
   }
+
   if (process.platform !== "darwin") {
     app.quit();
   }

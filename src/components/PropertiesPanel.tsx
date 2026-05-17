@@ -1,7 +1,14 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { Copy, Eye, EyeOff, Files, Lock, Pin, PinOff, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Copy, Eye, EyeOff, Files, Link2, Lock, Pin, PinOff, Trash2 } from "lucide-react";
 import { deviceTypeLabels, statusLabels, useStore } from "@/data/store";
-import type { CableType, Device, DeviceConnection, DeviceStatus, DeviceType, MapElement } from "@/types";
+import type {
+  CableType,
+  Device,
+  DeviceConnection,
+  DeviceStatus,
+  DeviceType,
+  MapElement,
+} from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { ROOM_PRESET_COLORS } from "@/utils/room-colors";
+import { getTextElementBounds } from "@/utils/text-element";
 
 const statuses: DeviceStatus[] = ["working", "offline", "needs_check", "reserve", "no_access"];
 const deviceTypes: DeviceType[] = ["camera", "nvr", "dvr", "switch", "poe_switch"];
@@ -30,7 +37,32 @@ const cableDefaultColors: Record<CableType, string> = {
   coaxial: "#6b21a8",
   power: "#b45309",
 };
-const quickColors = [...ROOM_PRESET_COLORS];
+const quickColors = ["#000000", "#a16207", "#dc2626", "#16a34a", "#6b7280", "#2563eb"];
+
+function buildCameraWebUrl(ip?: string) {
+  const value = (ip ?? "").trim();
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) {
+    try {
+      const url = new URL(value);
+      url.protocol = "http:";
+      return url.toString().replace(/\/+$/, "");
+    } catch {
+      return value;
+    }
+  }
+
+  const cleaned = value.replace(/^\/+/, "").replace(/\/+$/, "");
+  return `http://${cleaned}`;
+}
+
+function getElementLabel(element: MapElement) {
+  if (element.type === "room") return element.label || "Помещение";
+  if (element.type === "wall")
+    return element.label || (element.wallShape === "arc" ? "Полукруглая стена" : "Стена");
+  if (element.type === "door") return element.label || "Дверь";
+  return element.label || "Текст";
+}
 
 export function PropertiesPanel({
   rightPinned,
@@ -44,6 +76,7 @@ export function PropertiesPanel({
     activeObjectId,
     selectedId,
     selectedKind,
+    selectedItems,
     isEditMode,
     setEditMode,
     devices,
@@ -62,6 +95,22 @@ export function PropertiesPanel({
   } = useStore();
 
   const activeObject = objects.find((item) => item.id === activeObjectId) ?? null;
+
+  if (selectedItems.length > 1) {
+    return (
+      <MultiSelectionPanel
+        items={selectedItems}
+        canEdit={isEditMode}
+        devices={devices}
+        mapElements={mapElements}
+        deviceConnections={deviceConnections}
+        objects={objects}
+        onEnterEditMode={() => setEditMode(true)}
+        onTogglePin={onToggleRightPin}
+        pinned={rightPinned}
+      />
+    );
+  }
 
   if (!selectedId || !selectedKind) {
     return (
@@ -82,7 +131,7 @@ export function PropertiesPanel({
             Панель закреплена и останется открытой после клика по пустому месту.
           </div>
         )}
-        </aside>
+      </aside>
     );
   }
 
@@ -155,6 +204,311 @@ export function PropertiesPanel({
   );
 }
 
+function MultiSelectionPanel({
+  items,
+  canEdit,
+  devices,
+  mapElements,
+  deviceConnections,
+  objects,
+  onEnterEditMode,
+  onTogglePin,
+  pinned,
+}: {
+  items: { kind: "object" | "device" | "element" | "connection"; id: string }[];
+  canEdit: boolean;
+  devices: Device[];
+  mapElements: MapElement[];
+  deviceConnections: DeviceConnection[];
+  objects: { id: string; name: string }[];
+  onEnterEditMode: () => void;
+  onTogglePin: () => void;
+  pinned: boolean;
+}) {
+  const { groupSelectedItems, ungroupSelectedItems } = useStore();
+  const entries = useMemo(
+    () =>
+      items
+        .map((item) => {
+          if (item.kind === "device") {
+            const device = devices.find((entry) => entry.id === item.id);
+            return device
+              ? {
+                  item,
+                  title: device.name || "Устройство",
+                  subtitle: deviceTypeLabels[device.type],
+                  groupId: device.groupId ?? null,
+                }
+              : null;
+          }
+          if (item.kind === "element") {
+            const element = mapElements.find((entry) => entry.id === item.id);
+            return element
+              ? {
+                  item,
+                  title: getElementLabel(element),
+                  subtitle: element.type,
+                  groupId: element.groupId ?? null,
+                }
+              : null;
+          }
+          if (item.kind === "connection") {
+            const connection = deviceConnections.find((entry) => entry.id === item.id);
+            return connection
+              ? {
+                  item,
+                  title: connection.label || cableLabels[connection.type],
+                  subtitle: `${devices.find((entry) => entry.id === connection.from.deviceId)?.name ?? "Точка A"} → ${devices.find((entry) => entry.id === connection.to.deviceId)?.name ?? "Точка B"}`,
+                  groupId: null,
+                }
+              : null;
+          }
+          const object = objects.find((entry) => entry.id === item.id);
+          return object
+            ? {
+                item,
+                title: object.name,
+                subtitle: "Объект",
+                groupId: null,
+              }
+            : null;
+        })
+        .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry)),
+    [deviceConnections, devices, items, mapElements, objects],
+  );
+  const [activeKey, setActiveKey] = useState("main");
+
+  useEffect(() => {
+    const keys = new Set([
+      "main",
+      ...entries.map((entry) => `${entry.item.kind}:${entry.item.id}`),
+    ]);
+    if (!keys.has(activeKey)) setActiveKey("main");
+  }, [activeKey, entries]);
+
+  const groupableEntries = entries.filter(
+    (entry) => entry.item.kind === "device" || entry.item.kind === "element",
+  );
+  const firstGroupId = groupableEntries[0]?.groupId ?? null;
+  const allSameGroup =
+    !!firstGroupId &&
+    groupableEntries.length > 1 &&
+    groupableEntries.every((entry) => entry.groupId === firstGroupId);
+  const canGroup = canEdit && groupableEntries.length > 1 && !allSameGroup;
+  const canUngroup = canEdit && groupableEntries.some((entry) => entry.groupId);
+  const selectedEntry =
+    activeKey === "main"
+      ? null
+      : (entries.find((entry) => `${entry.item.kind}:${entry.item.id}` === activeKey) ?? null);
+
+  const renderEntryPanel = (entry: (typeof entries)[number]) => {
+    if (entry.item.kind === "object") {
+      const object = objects.find((item) => item.id === entry.item.id);
+      if (!object) return null;
+      return (
+        <ObjectPanel
+          object={object}
+          canEdit={canEdit}
+          onEnterEditMode={onEnterEditMode}
+          onUpdate={(name, description) => {
+            const current = objects.find((item) => item.id === entry.item.id);
+            if (!current) return;
+            useStore.getState().renameObject(current.id, name, description);
+          }}
+          onTogglePin={onTogglePin}
+          pinned={pinned}
+          embedded
+        />
+      );
+    }
+
+    if (entry.item.kind === "device") {
+      const device = devices.find((item) => item.id === entry.item.id);
+      if (!device) return null;
+      return (
+        <DevicePanel
+          device={device}
+          canEdit={canEdit}
+          connections={deviceConnections}
+          devices={devices}
+          onEnterEditMode={onEnterEditMode}
+          onUpdate={(patch) => {
+            const current = devices.find((item) => item.id === entry.item.id);
+            if (!current) return;
+            useStore.getState().updateDevice(current.id, patch);
+          }}
+          onDelete={() => {
+            const current = devices.find((item) => item.id === entry.item.id);
+            if (!current) return;
+            useStore.getState().removeDevice(current.id);
+          }}
+          onDup={() => {
+            const current = devices.find((item) => item.id === entry.item.id);
+            if (!current) return;
+            useStore.getState().duplicateDevice(current.id);
+          }}
+          onTogglePin={onTogglePin}
+          pinned={pinned}
+          onToggleConnection={(toDeviceId, connectionType) => {
+            const current = devices.find((item) => item.id === entry.item.id);
+            if (!current) return;
+            useStore.getState().toggleDeviceConnection(current.id, toDeviceId, connectionType);
+          }}
+          embedded
+        />
+      );
+    }
+
+    if (entry.item.kind === "connection") {
+      const connection = deviceConnections.find((item) => item.id === entry.item.id);
+      if (!connection) return null;
+      return (
+        <ConnectionPanel
+          connection={connection}
+          canEdit={canEdit}
+          devices={devices}
+          onEnterEditMode={onEnterEditMode}
+          onUpdate={(patch) => {
+            const current = deviceConnections.find((item) => item.id === entry.item.id);
+            if (!current) return;
+            useStore.getState().updateDeviceConnection(current.id, patch);
+          }}
+          onDelete={() => {
+            const current = deviceConnections.find((item) => item.id === entry.item.id);
+            if (!current) return;
+            useStore.getState().removeDeviceConnection(current.id);
+          }}
+          onTogglePin={onTogglePin}
+          pinned={pinned}
+          embedded
+        />
+      );
+    }
+
+    const element = mapElements.find((item) => item.id === entry.item.id);
+    if (!element) return null;
+    return (
+      <ElementPanel
+        el={element}
+        canEdit={canEdit}
+        onEnterEditMode={onEnterEditMode}
+        onUpdate={(patch) => {
+          const current = mapElements.find((item) => item.id === entry.item.id);
+          if (!current) return;
+          useStore.getState().updateElement(current.id, patch);
+        }}
+        onPresetColorChange={(color) =>
+          useStore.getState().updateSettings({ roomColorPreset: color })
+        }
+        onDelete={() => {
+          const current = mapElements.find((item) => item.id === entry.item.id);
+          if (!current) return;
+          useStore.getState().removeElement(current.id);
+        }}
+        onTogglePin={onTogglePin}
+        pinned={pinned}
+        embedded
+      />
+    );
+  };
+
+  return (
+    <aside className="w-80 border-l bg-card flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="p-3 border-b flex items-center justify-between gap-2 shrink-0">
+        <div className="font-semibold text-sm truncate">
+          Выбрано: {entries.length} {entries.length === 1 ? "объект" : "объектов"}
+        </div>
+        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onTogglePin}>
+          {pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+        </Button>
+      </div>
+
+      {!canEdit && (
+        <div className="px-3 pt-3">
+          <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground flex items-center justify-between gap-2">
+            <span>Для редактирования нескольких объектов включите режим редактирования.</span>
+            <Button size="sm" variant="outline" className="h-7" onClick={onEnterEditMode}>
+              Редактировать
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 min-h-0 overflow-hidden p-3">
+        <div className="flex h-full min-h-0 flex-col gap-3">
+          <Field label="Объект">
+            <Select value={activeKey} onValueChange={setActiveKey}>
+              <SelectTrigger className="h-8">
+                <SelectValue placeholder="Выберите объект" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="main">Главная</SelectItem>
+                {entries.map((entry) => (
+                  <SelectItem
+                    key={`${entry.item.kind}:${entry.item.id}`}
+                    value={`${entry.item.kind}:${entry.item.id}`}
+                  >
+                    {entry.title} — {entry.subtitle}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+
+          <div className="flex-1 min-h-0 overflow-hidden">
+            {activeKey === "main" ? (
+              <div className="space-y-3 text-xs">
+                <div className="rounded-md border bg-background/40 p-2 space-y-1">
+                  <div>Выбрано: {entries.length}</div>
+                  <div>
+                    Типы:{" "}
+                    {Array.from(new Set(entries.map((entry) => entry.subtitle))).join(", ") || "—"}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8"
+                    onClick={groupSelectedItems}
+                    disabled={!canGroup}
+                  >
+                    Группировать
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8"
+                    onClick={ungroupSelectedItems}
+                    disabled={!canUngroup}
+                  >
+                    Разгруппировать
+                  </Button>
+                </div>
+                <div className="space-y-1">
+                  {entries.map((entry) => (
+                    <div
+                      key={`${entry.item.kind}:${entry.item.id}`}
+                      className="rounded border bg-background px-2 py-1"
+                    >
+                      <div className="font-medium truncate">{entry.title}</div>
+                      <div className="text-muted-foreground truncate">{entry.subtitle}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="h-full min-h-0">
+                {selectedEntry ? renderEntryPanel(selectedEntry) : null}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 function ObjectPanel({
   object,
   canEdit,
@@ -162,6 +516,7 @@ function ObjectPanel({
   onUpdate,
   onTogglePin,
   pinned,
+  embedded = false,
 }: {
   object: { id: string; name: string; description?: string };
   canEdit: boolean;
@@ -169,20 +524,29 @@ function ObjectPanel({
   onUpdate: (name: string, description?: string) => void;
   onTogglePin: () => void;
   pinned: boolean;
+  embedded?: boolean;
 }) {
   const { floors, activeFloorId, activeObjectId } = useStore();
   const floorCount = floors.filter((floor) => floor.objectId === object.id).length;
   const activeFloor = floors.find((floor) => floor.id === activeFloorId) ?? null;
 
   return (
-    <aside className="w-72 border-l bg-card overflow-y-auto">
-      <div className="p-3 border-b flex items-center justify-between">
+    <aside
+      className={
+        embedded
+          ? "flex h-full min-h-0 flex-col overflow-hidden"
+          : "w-72 border-l bg-card flex h-full min-h-0 flex-col overflow-hidden"
+      }
+    >
+      <div className="p-3 border-b flex items-center justify-between shrink-0">
         <div className="font-semibold text-sm flex items-center gap-2 truncate">
           <span>Выбран: Объект — {object.name}</span>
         </div>
-        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onTogglePin}>
-          {pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
-        </Button>
+        {!embedded && (
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onTogglePin}>
+            {pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+          </Button>
+        )}
       </div>
       {!canEdit && (
         <div className="px-3 pt-3">
@@ -194,7 +558,7 @@ function ObjectPanel({
           </div>
         </div>
       )}
-      <div className="p-3 space-y-3 text-xs">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3 text-xs">
         <Field label="Название объекта">
           <Input
             value={object.name}
@@ -233,6 +597,7 @@ function DevicePanel({
   onToggleConnection,
   onTogglePin,
   pinned,
+  embedded = false,
 }: {
   device: Device;
   canEdit: boolean;
@@ -242,15 +607,21 @@ function DevicePanel({
   onUpdate: (p: Partial<Device>) => void;
   onDelete: () => void;
   onDup: () => void;
-  onToggleConnection: (
-    toDeviceId: string,
-    cableType: CableType,
-  ) => void;
+  onToggleConnection: (toDeviceId: string, cableType: CableType) => void;
   onTogglePin: () => void;
   pinned: boolean;
+  embedded?: boolean;
 }) {
   const [showPwd, setShowPwd] = useState(false);
   const copy = (value: string) => navigator.clipboard.writeText(value);
+  const openExternal = (url: string) => {
+    const bridge = window.cctvDesktop;
+    if (bridge) {
+      void bridge.openExternal(url);
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
   const related = useMemo(
     () =>
       connections
@@ -259,33 +630,76 @@ function DevicePanel({
           connection,
           target: devices.find((item) => item.id === connection.to.deviceId) ?? null,
         }))
-        .filter((item) => item.target),
+        .filter(
+          (item): item is { connection: DeviceConnection; target: Device } => item.target !== null,
+        ),
+    [connections, device.id, devices],
+  );
+  const cameraLinks = useMemo(
+    () =>
+      connections
+        .filter(
+          (connection) =>
+            connection.from.deviceId === device.id || connection.to.deviceId === device.id,
+        )
+        .map((connection) => {
+          const otherId =
+            connection.from.deviceId === device.id
+              ? connection.to.deviceId
+              : connection.from.deviceId;
+          return {
+            connection,
+            target: devices.find((item) => item.id === otherId) ?? null,
+            direction: connection.from.deviceId === device.id ? "out" : "in",
+          };
+        })
+        .filter(
+          (
+            item,
+          ): item is {
+            connection: DeviceConnection;
+            target: Device;
+            direction: "out" | "in";
+          } => item.target !== null,
+        ),
     [connections, device.id, devices],
   );
   const candidates = useMemo(
-    () =>
-      devices.filter((item) => item.id !== device.id && item.objectId === device.objectId),
+    () => devices.filter((item) => item.id !== device.id && item.objectId === device.objectId),
     [device.id, device.objectId, devices],
   );
+  const missingCameraIp = device.type === "camera" && !device.ip?.trim();
+  const missingCameraPassword = device.type === "camera" && !device.password?.trim();
+  const requiredFieldClass =
+    "border-orange-400 bg-orange-50/70 focus-visible:ring-orange-500 disabled:opacity-100";
 
   const connectionTypeForTarget = (target: Device): CableType => {
     if (device.type === "poe_switch") return target.type === "camera" ? "power" : "utp";
     if (device.type === "switch") return "utp";
-    if (device.type === "nvr" || device.type === "dvr") return target.type === "camera" ? "coaxial" : "utp";
+    if (device.type === "nvr" || device.type === "dvr")
+      return target.type === "camera" ? "coaxial" : "utp";
     return "utp";
   };
 
   return (
-    <aside className="w-72 border-l bg-card overflow-y-auto">
-      <div className="p-3 border-b sticky top-0 bg-card flex items-center justify-between gap-2 z-10">
+    <aside
+      className={
+        embedded
+          ? "flex h-full min-h-0 flex-col overflow-hidden"
+          : "w-72 border-l bg-card flex h-full min-h-0 flex-col overflow-hidden"
+      }
+    >
+      <div className="p-3 border-b sticky top-0 bg-card flex items-center justify-between gap-2 z-10 shrink-0">
         <div className="font-semibold text-sm truncate flex items-center gap-2">
           <span>Выбран: {device.name || "Устройство"}</span>
           {device.locked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
         </div>
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onTogglePin}>
-            {pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
-          </Button>
+          {!embedded && (
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onTogglePin}>
+              {pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+            </Button>
+          )}
           {canEdit && (
             <div className="flex gap-1">
               <Button
@@ -322,7 +736,25 @@ function DevicePanel({
         </div>
       )}
 
-      <div className="p-3 space-y-3 text-xs">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3 text-xs">
+        <Field label="Статус">
+          <Select
+            value={device.status}
+            onValueChange={(value) => onUpdate({ status: value as DeviceStatus })}
+          >
+            <SelectTrigger className="h-8" disabled={!canEdit}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {statuses.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {statusLabels[status]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+
         <Field label="Тип устройства">
           <Select
             value={device.type}
@@ -351,22 +783,13 @@ function DevicePanel({
           />
         </Field>
 
-        <Field label="Статус">
-          <Select
-            value={device.status}
-            onValueChange={(value) => onUpdate({ status: value as DeviceStatus })}
-          >
-            <SelectTrigger className="h-8" disabled={!canEdit}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {statuses.map((status) => (
-                <SelectItem key={status} value={status}>
-                  {statusLabels[status]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <Field label="Место установки">
+          <Input
+            value={device.location ?? ""}
+            onChange={(e) => onUpdate({ location: e.target.value })}
+            className="h-8"
+            disabled={!canEdit}
+          />
         </Field>
 
         <Field label="Заморозить">
@@ -382,21 +805,32 @@ function DevicePanel({
         </Field>
 
         <Field label="IP-адрес">
-          <div className="flex gap-1">
-            <Input
-              value={device.ip ?? ""}
-              onChange={(e) => onUpdate({ ip: e.target.value })}
-              className="h-8"
-              disabled={!canEdit}
-            />
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-8 px-2 shrink-0"
-              onClick={() => copy(device.ip ?? "")}
-            >
-              <Copy className="h-3 w-3 mr-1" /> Скопировать IP
-            </Button>
+          <div className="space-y-1">
+            <div className="flex gap-1">
+              <Input
+                value={device.ip ?? ""}
+                onChange={(e) => onUpdate({ ip: e.target.value })}
+                className={`h-8 ${missingCameraIp ? requiredFieldClass : ""}`}
+                disabled={!canEdit}
+              />
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2 shrink-0"
+                onClick={() => {
+                  const url = buildCameraWebUrl(device.ip);
+                  if (url) openExternal(url);
+                }}
+                disabled={!device.ip}
+              >
+                <Link2 className="h-3 w-3 mr-1" /> Линк
+              </Button>
+            </div>
+            {missingCameraIp && (
+              <div className="text-[11px] font-medium text-orange-700">
+                Важное поле: из-за него камера отмечена оранжевой точкой.
+              </div>
+            )}
           </div>
         </Field>
 
@@ -410,45 +844,28 @@ function DevicePanel({
         </Field>
 
         <Field label="Пароль">
-          <div className="space-y-2">
-            <div className="relative">
-              <Input
-                type="text"
-                value={device.password ?? ""}
-                onChange={(e) => onUpdate({ password: e.target.value })}
-                className={`h-8 w-full font-mono pr-3 ${
-                  showPwd ? "" : "text-transparent caret-foreground"
-                }`}
-                style={showPwd ? undefined : { caretColor: "hsl(var(--foreground))" }}
-                disabled={!canEdit}
-                spellCheck={false}
-                autoComplete="new-password"
-              />
-              {!showPwd && device.password && (
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-0 flex items-center px-3 font-mono text-foreground/75 overflow-hidden whitespace-nowrap"
-                >
-                  {"*".repeat(device.password.length)}
-                </div>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-1">
+          <div className="space-y-1">
+            <div className="flex gap-1 items-start">
+              <div className="relative min-w-0 flex-1">
+                <Input
+                  type={showPwd ? "text" : "password"}
+                  value={device.password ?? ""}
+                  onChange={(e) => onUpdate({ password: e.target.value })}
+                  className={`h-8 w-full font-mono pr-3 ${
+                    missingCameraPassword ? requiredFieldClass : ""
+                  }`}
+                  disabled={!canEdit}
+                  spellCheck={false}
+                  autoComplete="new-password"
+                />
+              </div>
               <Button
                 size="sm"
                 variant="ghost"
                 className="h-8 px-2 shrink-0"
                 onClick={() => setShowPwd((value) => !value)}
               >
-                {showPwd ? (
-                  <>
-                    <EyeOff className="h-3 w-3 mr-1" /> Скрыть
-                  </>
-                ) : (
-                  <>
-                    <Eye className="h-3 w-3 mr-1" /> Показать пароль
-                  </>
-                )}
+                {showPwd ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
               </Button>
               <Button
                 size="sm"
@@ -456,9 +873,14 @@ function DevicePanel({
                 className="h-8 px-2 shrink-0"
                 onClick={() => copy(device.password ?? "")}
               >
-                <Copy className="h-3 w-3 mr-1" /> Скопировать пароль
+                <Copy className="h-3 w-3" />
               </Button>
             </div>
+            {missingCameraPassword && (
+              <div className="text-[11px] font-medium text-orange-700">
+                Важное поле: из-за него камера отмечена оранжевой точкой.
+              </div>
+            )}
           </div>
           {/* TODO: later master password encryption. */}
         </Field>
@@ -472,42 +894,56 @@ function DevicePanel({
           />
         </Field>
 
-        <Field label="Серийный номер">
-          <Input
-            value={device.serialNumber ?? ""}
-            onChange={(e) => onUpdate({ serialNumber: e.target.value })}
-            className="h-8"
-            disabled={!canEdit}
-          />
-        </Field>
+        {device.type === "camera" && (
+          <div className="pt-2 border-t space-y-2">
+            <div className="font-semibold text-foreground">Связь</div>
+            {cameraLinks.length > 0 ? (
+              <div className="space-y-1">
+                {cameraLinks.map(({ connection, target, direction }) => (
+                  <div
+                    key={connection.id}
+                    className="rounded border bg-background/40 px-2 py-1 text-[11px] leading-4"
+                  >
+                    <div className="font-medium text-foreground truncate">
+                      {direction === "out" ? "К" : "От"} {target?.name ?? "Устройство"}
+                    </div>
+                    <div className="text-muted-foreground truncate">
+                      {cableLabels[connection.type]}
+                      {connection.label ? ` • ${connection.label}` : ""}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded border bg-background/40 px-2 py-1 text-[11px] text-muted-foreground">
+                Камера не подключена
+              </div>
+            )}
+          </div>
+        )}
 
-        <Field label="Место установки">
-          <Input
-            value={device.location ?? ""}
-            onChange={(e) => onUpdate({ location: e.target.value })}
-            className="h-8"
-            disabled={!canEdit}
-          />
-        </Field>
-
-        <Field label="Ответственный">
-          <Input
-            value={device.responsiblePerson ?? ""}
-            onChange={(e) => onUpdate({ responsiblePerson: e.target.value })}
-            className="h-8"
-            disabled={!canEdit}
-          />
-        </Field>
-
-        <Field label="Дата последней проверки">
-          <Input
-            type="date"
-            value={device.lastCheckedAt ?? ""}
-            onChange={(e) => onUpdate({ lastCheckedAt: e.target.value })}
-            className="h-8"
-            disabled={!canEdit}
-          />
-        </Field>
+        {canEdit && (
+          <div className="pt-2 border-t space-y-2">
+            <div className="font-semibold text-foreground">Связи</div>
+            {device.type === "nvr" || device.type === "dvr" ? (
+              <ConnectionList
+                title="Подключённые камеры"
+                candidates={candidates.filter((item) => item.type === "camera")}
+                related={related}
+                onToggleConnection={onToggleConnection}
+                connectionTypeResolver={connectionTypeForTarget}
+              />
+            ) : device.type === "switch" || device.type === "poe_switch" ? (
+              <ConnectionList
+                title="Подключённые устройства"
+                candidates={candidates}
+                related={related}
+                onToggleConnection={onToggleConnection}
+                connectionTypeResolver={connectionTypeForTarget}
+              />
+            ) : null}
+          </div>
+        )}
 
         <Field label="Заметки">
           <Textarea
@@ -520,24 +956,6 @@ function DevicePanel({
 
         {device.type === "camera" && (
           <>
-            <Field label="RTSP-строка">
-              <div className="flex gap-1">
-                <Input
-                  value={device.rtspUrl ?? ""}
-                  onChange={(e) => onUpdate({ rtspUrl: e.target.value })}
-                  className="h-8 font-mono"
-                  disabled={!canEdit}
-                />
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 px-2 shrink-0"
-                  onClick={() => copy(device.rtspUrl ?? "")}
-                >
-                  <Copy className="h-3 w-3 mr-1" /> Скопировать RTSP
-                </Button>
-              </div>
-            </Field>
             <div className="pt-2 border-t space-y-3">
               <div className="font-semibold text-foreground">Обзор</div>
               <Field label={`Угол обзора: ${device.fovAngle ?? 90}°`}>
@@ -652,29 +1070,6 @@ function DevicePanel({
             </Field>
           </div>
         ) : null}
-
-        {canEdit && (
-          <div className="pt-2 border-t space-y-2">
-            <div className="font-semibold text-foreground">Связи</div>
-            {device.type === "nvr" || device.type === "dvr" ? (
-              <ConnectionList
-                title="Подключённые камеры"
-                candidates={candidates.filter((item) => item.type === "camera")}
-                related={related}
-                onToggleConnection={onToggleConnection}
-                connectionTypeResolver={connectionTypeForTarget}
-              />
-            ) : device.type === "switch" || device.type === "poe_switch" ? (
-              <ConnectionList
-                title="Подключённые устройства"
-                candidates={candidates}
-                related={related}
-                onToggleConnection={onToggleConnection}
-                connectionTypeResolver={connectionTypeForTarget}
-              />
-            ) : null}
-          </div>
-        )}
       </div>
     </aside>
   );
@@ -690,17 +1085,16 @@ function ConnectionList({
   title: string;
   candidates: Device[];
   related: { connection: DeviceConnection; target: Device }[];
-  onToggleConnection: (
-    toDeviceId: string,
-    cableType: CableType,
-  ) => void;
+  onToggleConnection: (toDeviceId: string, cableType: CableType) => void;
   connectionTypeResolver: (target: Device) => CableType;
 }) {
   return (
     <div className="space-y-2">
       <div className="text-xs font-medium text-muted-foreground">{title}</div>
-      <div className="max-h-44 overflow-y-auto space-y-1 rounded border bg-background/40 p-2">
-        {candidates.length === 0 && <div className="text-[11px] text-muted-foreground">Нет устройств</div>}
+      <div className="max-h-56 overflow-y-auto space-y-1 rounded border bg-background/40 p-2">
+        {candidates.length === 0 && (
+          <div className="text-[11px] text-muted-foreground">Нет устройств</div>
+        )}
         {candidates.map((candidate) => {
           const active = related.some((item) => item.target.id === candidate.id);
           return (
@@ -742,6 +1136,7 @@ function ConnectionPanel({
   onDelete,
   onTogglePin,
   pinned,
+  embedded = false,
 }: {
   connection: DeviceConnection;
   canEdit: boolean;
@@ -751,15 +1146,21 @@ function ConnectionPanel({
   onDelete: () => void;
   onTogglePin: () => void;
   pinned: boolean;
+  embedded?: boolean;
 }) {
   const fromName = devices.find((item) => item.id === connection.from.deviceId)?.name ?? "Точка A";
   const toName = devices.find((item) => item.id === connection.to.deviceId)?.name ?? "Точка B";
   const approxLength = (() => {
     const resolve = (endpoint: DeviceConnection["from"] | DeviceConnection["to"]) => {
-      const device = endpoint.deviceId ? devices.find((item) => item.id === endpoint.deviceId) : null;
+      const device = endpoint.deviceId
+        ? devices.find((item) => item.id === endpoint.deviceId)
+        : null;
       if (!device) return { x: endpoint.x, y: endpoint.y };
       if (device.type === "camera") return { x: device.x, y: device.y };
-      const size = device.type === "nvr" || device.type === "dvr" ? { width: 64, height: 36 } : { width: 72, height: 30 };
+      const size =
+        device.type === "nvr" || device.type === "dvr"
+          ? { width: 64, height: 36 }
+          : { width: 72, height: 30 };
       const halfW = size.width / 2;
       const halfH = size.height / 2;
       switch (endpoint.anchor) {
@@ -776,23 +1177,34 @@ function ConnectionPanel({
       }
     };
     const points = [resolve(connection.from), ...connection.points, resolve(connection.to)];
-    return points.slice(1).reduce((sum, point, index) => {
-      const prev = points[index];
-      return sum + Math.hypot(point.x - prev.x, point.y - prev.y);
-    }, 0).toFixed(1);
+    return points
+      .slice(1)
+      .reduce((sum, point, index) => {
+        const prev = points[index];
+        return sum + Math.hypot(point.x - prev.x, point.y - prev.y);
+      }, 0)
+      .toFixed(1);
   })();
 
   return (
-    <aside className="w-72 border-l bg-card overflow-y-auto">
-      <div className="p-3 border-b flex items-center justify-between gap-2">
+    <aside
+      className={
+        embedded
+          ? "flex h-full min-h-0 flex-col overflow-hidden"
+          : "w-72 border-l bg-card flex h-full min-h-0 flex-col overflow-hidden"
+      }
+    >
+      <div className="p-3 border-b flex items-center justify-between gap-2 shrink-0">
         <div className="font-semibold text-sm flex items-center gap-2">
           <span>Выбран: Кабель</span>
           {connection.locked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
         </div>
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onTogglePin}>
-            {pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
-          </Button>
+          {!embedded && (
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onTogglePin}>
+              {pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+            </Button>
+          )}
           {canEdit && (
             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onDelete}>
               <Trash2 className="h-4 w-4 text-destructive" />
@@ -811,11 +1223,14 @@ function ConnectionPanel({
         </div>
       )}
 
-      <div className="p-3 space-y-3 text-xs">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3 text-xs">
         <Field label="Тип кабеля">
           <Select
             value={connection.type}
-            onValueChange={(value) => onUpdate({ type: value as CableType })}
+            onValueChange={(value) => {
+              const nextType = value as CableType;
+              onUpdate({ type: nextType, label: cableLabels[nextType] });
+            }}
             disabled={!canEdit}
           >
             <SelectTrigger className="h-8">
@@ -898,6 +1313,7 @@ function ElementPanel({
   onDelete,
   onTogglePin,
   pinned,
+  embedded = false,
 }: {
   el: MapElement;
   canEdit: boolean;
@@ -907,20 +1323,43 @@ function ElementPanel({
   onDelete: () => void;
   onTogglePin: () => void;
   pinned: boolean;
+  embedded?: boolean;
 }) {
+  const updateTextSize = (label: string, fontSize: number) => {
+    const bounds = getTextElementBounds(label, fontSize);
+    onUpdate({ label, fontSize, width: bounds.width, height: bounds.height });
+  };
+
   return (
-    <aside className="w-80 border-l bg-card overflow-y-auto">
-      <div className="p-3 border-b flex items-center justify-between gap-2">
+    <aside
+      className={
+        embedded
+          ? "flex h-full min-h-0 flex-col overflow-hidden"
+          : "w-80 border-l bg-card flex h-full min-h-0 flex-col overflow-hidden"
+      }
+    >
+      <div className="p-3 border-b flex items-center justify-between gap-2 shrink-0">
         <div className="font-semibold text-sm flex items-center gap-2">
           <span>
-            Выбран: Элемент — {el.type === "room" ? "Помещение" : el.type === "wall" ? "Стена" : el.type === "door" ? "Дверь" : "Текст"}
+            Выбран: Элемент —{" "}
+            {el.type === "room"
+              ? "Помещение"
+              : el.type === "wall"
+                ? el.wallShape === "arc"
+                  ? "Полукруглая стена"
+                  : "Стена"
+                : el.type === "door"
+                  ? "Дверь"
+                  : "Текст"}
           </span>
           {el.locked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
         </div>
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onTogglePin}>
-            {pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
-          </Button>
+          {!embedded && (
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onTogglePin}>
+              {pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+            </Button>
+          )}
           {canEdit && (
             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onDelete}>
               <Trash2 className="h-4 w-4 text-destructive" />
@@ -938,12 +1377,33 @@ function ElementPanel({
           </div>
         </div>
       )}
-      <div className="p-3 space-y-3 text-xs">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3 text-xs">
         {(el.type === "room" || el.type === "text") && (
           <Field label="Подпись">
             <Input
               value={el.label ?? ""}
-              onChange={(e) => onUpdate({ label: e.target.value })}
+              onChange={(e) => {
+                const label = e.target.value;
+                if (el.type === "text") {
+                  updateTextSize(label, el.fontSize ?? 16);
+                  return;
+                }
+                onUpdate({ label });
+              }}
+              className="h-8"
+              disabled={!canEdit}
+            />
+          </Field>
+        )}
+        {el.type === "text" && (
+          <Field label="Размер текста">
+            <Input
+              type="number"
+              min={8}
+              max={64}
+              step={1}
+              value={el.fontSize ?? 16}
+              onChange={(e) => updateTextSize(el.label ?? "", Number(e.target.value) || 16)}
               className="h-8"
               disabled={!canEdit}
             />
@@ -959,6 +1419,35 @@ function ElementPanel({
             disabled={!canEdit}
           />
         </Field>
+
+        {(el.type === "room" || el.type === "wall") && (
+          <Field label="Толщина линии">
+            <Input
+              type="number"
+              min={1}
+              max={20}
+              step={0.5}
+              value={el.strokeWidth ?? 2}
+              onChange={(e) => onUpdate({ strokeWidth: Number(e.target.value) })}
+              className="h-8"
+              disabled={!canEdit}
+            />
+          </Field>
+        )}
+
+        {el.type === "wall" && el.wallShape === "arc" && (
+          <Field label="Изгиб полукруга">
+            <Input
+              type="number"
+              step={5}
+              value={Math.round(el.curveOffset ?? Math.hypot(el.width, el.height) / 2)}
+              onChange={(e) => onUpdate({ curveOffset: Number(e.target.value) })}
+              className="h-8"
+              disabled={!canEdit}
+            />
+          </Field>
+        )}
+
         <Field label="Заморозить">
           <label className="flex items-center gap-2 rounded border bg-background px-2 h-8 text-xs">
             <input
@@ -970,26 +1459,28 @@ function ElementPanel({
             <span>{el.locked ? "Locked" : "Unlocked"}</span>
           </label>
         </Field>
-        <div className="grid grid-cols-2 gap-2">
-          <Field label="Ширина">
-            <Input
-              type="number"
-              value={Math.round(el.width)}
-              onChange={(e) => onUpdate({ width: +e.target.value })}
-              className="h-8"
-              disabled={!canEdit}
-            />
-          </Field>
-          <Field label="Высота">
-            <Input
-              type="number"
-              value={Math.round(el.height)}
-              onChange={(e) => onUpdate({ height: +e.target.value })}
-              className="h-8"
-              disabled={!canEdit}
-            />
-          </Field>
-        </div>
+        {el.type !== "text" && (
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Ширина">
+              <Input
+                type="number"
+                value={Math.round(el.width)}
+                onChange={(e) => onUpdate({ width: +e.target.value })}
+                className="h-8"
+                disabled={!canEdit}
+              />
+            </Field>
+            <Field label="Высота">
+              <Input
+                type="number"
+                value={Math.round(el.height)}
+                onChange={(e) => onUpdate({ height: +e.target.value })}
+                className="h-8"
+                disabled={!canEdit}
+              />
+            </Field>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2">
           <Field label="X">
             <Input

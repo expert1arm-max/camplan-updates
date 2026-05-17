@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
-import { ArrowLeft, Download, MapPin, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, MapPin, Trash2 } from "lucide-react";
 import { deviceTypeLabels, statusColors, statusLabels, useStore } from "@/data/store";
 import type { DeviceStatus, DeviceType } from "@/types";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -31,7 +32,7 @@ export const Route = createFileRoute("/cameras")({
   component: DevicesPage,
 });
 
-type SortKey = "type" | "name" | "ip" | "status" | "lastCheckedAt";
+type SortKey = "type" | "name" | "ip" | "object" | "floor" | "status" | "lastCheckedAt";
 
 function DevicesPage() {
   const { devices, floors, objects, focusDevice, removeDevice, isEditMode } = useStore();
@@ -41,6 +42,7 @@ function DevicesPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [revealedPasswordId, setRevealedPasswordId] = useState<string | null>(null);
 
   const locationName = useCallback(
     (device: (typeof devices)[number]) => {
@@ -81,8 +83,14 @@ function DevicesPage() {
     });
 
     return [...list].sort((a, b) => {
-      const left = String(a[sortKey] ?? "");
-      const right = String(b[sortKey] ?? "");
+      const left =
+        sortKey === "object" || sortKey === "floor"
+          ? locationName(a)[sortKey]
+          : String(a[sortKey] ?? "");
+      const right =
+        sortKey === "object" || sortKey === "floor"
+          ? locationName(b)[sortKey]
+          : String(b[sortKey] ?? "");
       return sortDir === "asc" ? left.localeCompare(right) : right.localeCompare(left);
     });
   }, [devices, search, typeFilter, objectFilter, statusFilter, sortKey, sortDir, locationName]);
@@ -154,7 +162,12 @@ function DevicesPage() {
           className="h-9 w-56"
         />
         <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="h-9 w-44">
+          <SelectTrigger
+            className={cn(
+              "h-9 w-44",
+              typeFilter !== "all" && "border-destructive/70 bg-destructive/5 text-destructive",
+            )}
+          >
             <SelectValue placeholder="Тип" />
           </SelectTrigger>
           <SelectContent>
@@ -167,7 +180,12 @@ function DevicesPage() {
           </SelectContent>
         </Select>
         <Select value={objectFilter} onValueChange={setObjectFilter}>
-          <SelectTrigger className="h-9 w-40">
+          <SelectTrigger
+            className={cn(
+              "h-9 w-40",
+              objectFilter !== "all" && "border-destructive/70 bg-destructive/5 text-destructive",
+            )}
+          >
             <SelectValue placeholder="Объект" />
           </SelectTrigger>
           <SelectContent>
@@ -180,7 +198,12 @@ function DevicesPage() {
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-9 w-44">
+          <SelectTrigger
+            className={cn(
+              "h-9 w-44",
+              statusFilter !== "all" && "border-destructive/70 bg-destructive/5 text-destructive",
+            )}
+          >
             <SelectValue placeholder="Статус" />
           </SelectTrigger>
           <SelectContent>
@@ -211,8 +234,12 @@ function DevicesPage() {
                 <TableHead className="cursor-pointer" onClick={() => toggleSort("ip")}>
                   IP
                 </TableHead>
-                <TableHead>Объект</TableHead>
-                <TableHead>Зона</TableHead>
+                <TableHead className="cursor-pointer" onClick={() => toggleSort("object")}>
+                  Объект
+                </TableHead>
+                <TableHead className="cursor-pointer" onClick={() => toggleSort("floor")}>
+                  Зона
+                </TableHead>
                 <TableHead className="cursor-pointer" onClick={() => toggleSort("status")}>
                   Статус
                 </TableHead>
@@ -231,7 +258,9 @@ function DevicesPage() {
                 const place = locationName(device);
                 return (
                   <TableRow key={device.id}>
-                    <TableCell className="text-xs font-medium">{deviceTypeLabels[device.type]}</TableCell>
+                    <TableCell className="text-xs font-medium">
+                      {deviceTypeLabels[device.type]}
+                    </TableCell>
                     <TableCell className="font-medium">{device.name}</TableCell>
                     <TableCell className="font-mono text-xs">{device.ip || "—"}</TableCell>
                     <TableCell>{place.object}</TableCell>
@@ -254,10 +283,27 @@ function DevicesPage() {
                     <TableCell className="text-xs">{device.model ?? "—"}</TableCell>
                     <TableCell className="text-xs">{device.username ?? "—"}</TableCell>
                     <TableCell className="text-xs font-mono">
-                      {device.password ? "••••••" : "—"}
+                      {device.password ? (
+                        <button
+                          type="button"
+                          className="rounded px-1 py-0.5 text-left hover:bg-muted"
+                          onClick={() =>
+                            setRevealedPasswordId((current) =>
+                              current === device.id ? null : device.id,
+                            )
+                          }
+                          title="Показать или скрыть пароль"
+                        >
+                          {revealedPasswordId === device.id ? device.password : "••••••"}
+                        </button>
+                      ) : (
+                        "—"
+                      )}
                     </TableCell>
                     <TableCell className="text-xs">{device.lastCheckedAt || "—"}</TableCell>
-                    <TableCell className="text-xs max-w-[200px] truncate">{device.notes ?? ""}</TableCell>
+                    <TableCell className="text-xs max-w-[200px] truncate">
+                      {device.notes ?? ""}
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
                         <Link to="/" onClick={() => focusDevice(device.id)}>
@@ -267,11 +313,6 @@ function DevicesPage() {
                         </Link>
                         {isEditMode && (
                           <>
-                            <Link to="/" onClick={() => focusDevice(device.id)}>
-                              <Button variant="ghost" size="sm">
-                                <Pencil className="h-3 w-3 mr-1" /> Правка
-                              </Button>
-                            </Link>
                             <Button
                               variant="ghost"
                               size="sm"

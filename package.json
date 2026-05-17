@@ -1,6 +1,6 @@
 {
   "name": "tanstack_start_ts",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Desktop CCTV manager for Windows.",
   "author": "Lovable",
@@ -14,7 +14,6 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "dist:win": "npm run build && electron-builder --win nsis",
-    "dist:portable": "npm run build && electron-builder --win portable",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
@@ -73,7 +72,8 @@
     "vaul": "^1.1.2",
     "vite-tsconfig-paths": "^6.0.2",
     "zod": "^3.24.2",
-    "zustand": "^5.0.13"
+    "zustand": "^5.0.13",
+    "electron-updater": "^6.3.9"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
@@ -116,6 +116,13 @@
       "target": [
         "nsis"
       ]
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "expert1arm-max",
+        "repo": "camplan-updates"
+      }
+    ]
   }
 }

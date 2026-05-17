@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+﻿import { Link } from "@tanstack/react-router";
 import {
   Camera,
   Check,
@@ -6,15 +6,16 @@ import {
   DoorOpen,
   Eye,
   ChevronDown,
+  FilePlus2,
   Link2,
   Network,
   Pencil,
   Minus,
+  RotateCcw,
   Search,
   Server,
   Square,
   Type,
-  Trash2,
   Upload,
   Wifi,
   Table2,
@@ -39,12 +40,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 
 declare global {
   interface Window {
     cctvDesktop?: {
       openJsonFile: () => Promise<string | null>;
+      openExternal: (url: string) => Promise<boolean>;
       saveTextFile: (payload: {
         defaultPath: string;
         content: string;
@@ -59,41 +71,60 @@ declare global {
   }
 }
 
-const tools: { mode: EditorMode; icon: typeof Square; label: string }[] = [
-  { mode: "select", icon: Eye, label: "Выбор" },
-  { mode: "room", icon: Square, label: "Комната" },
-  { mode: "wall", icon: Minus, label: "Стена" },
-  { mode: "door", icon: DoorOpen, label: "Дверь" },
-  { mode: "text", icon: Type, label: "Текст" },
-  { mode: "connector", icon: Link2, label: "Кабель" },
-  { mode: "camera", icon: Camera, label: "Камера" },
-  { mode: "nvr", icon: Server, label: "NVR" },
-  { mode: "dvr", icon: Network, label: "DVR" },
-  { mode: "switch", icon: Wifi, label: "Switch" },
-  { mode: "poe_switch", icon: Zap, label: "PoE Switch" },
-  { mode: "delete", icon: Trash2, label: "Удалить" },
-];
+const toolGroups: { title: string; items: { mode: EditorMode; icon: typeof Square; label: string }[] }[] =
+  [
+    {
+      title: "Общее",
+      items: [{ mode: "select", icon: Eye, label: "Выбор" }],
+    },
+    {
+      title: "План",
+      items: [
+        { mode: "room", icon: Square, label: "Комната" },
+        { mode: "wall", icon: Minus, label: "Стена" },
+        { mode: "curved_wall", icon: RotateCcw, label: "Полукруглая стена" },
+        { mode: "door", icon: DoorOpen, label: "Дверь" },
+      ],
+    },
+    {
+      title: "Сервис",
+      items: [{ mode: "text", icon: Type, label: "Текст" }],
+    },
+    {
+      title: "Кабель",
+      items: [{ mode: "connector", icon: Link2, label: "Кабель" }],
+    },
+    {
+      title: "Девайсы",
+      items: [
+        { mode: "camera", icon: Camera, label: "Камера" },
+        { mode: "nvr", icon: Server, label: "NVR" },
+        { mode: "dvr", icon: Network, label: "DVR" },
+        { mode: "switch", icon: Wifi, label: "Switch" },
+        { mode: "poe_switch", icon: Zap, label: "PoE Switch" },
+      ],
+    },
+  ];
 
-export function Toolbar({
-  search,
-  setSearch,
-}: {
-  search: string;
-  setSearch: (s: string) => void;
-}) {
+export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: string) => void }) {
   const {
     mode,
     isEditMode,
     currentCableType,
+    settings,
+    clearSelection,
     setCableType,
     setEditMode,
     setMode,
+    updateUiState,
+    newProject,
     exportJSON,
     importJSON,
-    savedAt,
   } = useStore();
   const fileRef = useRef<HTMLInputElement>(null);
   const [savedFlash, setSavedFlash] = useState(false);
+  const [newProjectPromptOpen, setNewProjectPromptOpen] = useState(false);
+  const showIpLabels = settings.uiState?.showIpLabels ?? false;
 
   const saveFile = async (
     defaultPath: string,
@@ -202,6 +233,34 @@ export function Toolbar({
     fileRef.current?.click();
   };
 
+  const handleNewProject = () => {
+    const state = useStore.getState();
+    const hasContent =
+      state.objects.length > 0 ||
+      state.floors.length > 0 ||
+      state.mapElements.length > 0 ||
+      state.devices.length > 0 ||
+      state.deviceConnections.length > 0;
+
+    if (hasContent) {
+      setNewProjectPromptOpen(true);
+      return;
+    }
+
+    newProject();
+  };
+
+  const handleNewProjectSave = async () => {
+    setNewProjectPromptOpen(false);
+    await handleExportJson();
+    newProject();
+  };
+
+  const handleNewProjectNo = () => {
+    setNewProjectPromptOpen(false);
+    newProject();
+  };
+
   return (
     <div
       className={cn(
@@ -209,48 +268,102 @@ export function Toolbar({
         isEditMode && "ring-1 ring-primary/15 bg-card/95",
       )}
     >
-      <div className="flex items-center gap-2 mr-2">
-        <div className="font-semibold text-sm">CCTV Manager</div>
-        <span
-          className={cn(
-            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide",
-            isEditMode
-              ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
-              : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-          )}
-        >
-          {isEditMode ? <Pencil className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-          {isEditMode ? "Редактирование" : "Просмотр"}
-        </span>
-        {!isEditMode && savedFlash && (
-          <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-            Изменения сохранены
-          </span>
-        )}
-      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm">
+            Файл
+            <ChevronDown className="h-4 w-4 ml-1" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuItem onClick={handleNewProject}>
+            <FilePlus2 className="h-4 w-4" /> Новый проект
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleExportJson}>
+            <Download className="h-4 w-4" /> Сохранить проект
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleImport}>
+            <Upload className="h-4 w-4" /> Открыть проект
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleExportJpg}>
+            <Download className="h-4 w-4" /> Экспорт JPG
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleExportCsv}>
+            <Download className="h-4 w-4" /> Экспорт CSV
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-      {isEditMode && (
-        <div className="flex items-center gap-0.5 bg-muted rounded p-0.5">
-          {tools.map((t) => (
-            <button
-              key={t.mode}
-              title={t.label}
-              onClick={() => setMode(t.mode)}
-              className={cn(
-                "h-8 w-8 flex items-center justify-center rounded transition-colors",
-                mode === t.mode
-                  ? "bg-background shadow-sm text-primary"
-                  : "hover:bg-background/50",
-              )}
-            >
-              <t.icon className="h-4 w-4" />
-            </button>
-          ))}
-        </div>
-      )}
+      <AlertDialog open={newProjectPromptOpen} onOpenChange={setNewProjectPromptOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Создать новый проект?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Текущий проект будет закрыт. Можно сохранить его в JSON-файл перед созданием нового,
+              либо закрыть без сохранения.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setNewProjectPromptOpen(false)}>
+              Отмена
+            </AlertDialogCancel>
+            <Button variant="outline" onClick={handleNewProjectNo}>
+              Нет
+            </Button>
+            <AlertDialogAction onClick={handleNewProjectSave}>
+              Сохранить и создать
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Button
+        variant="outline"
+        size="sm"
+        className={cn(
+          "min-w-[176px] justify-center whitespace-nowrap",
+          isEditMode &&
+            "border-amber-500/30 bg-amber-500/15 text-amber-700 hover:bg-amber-500/20 dark:text-amber-300",
+        )}
+        onClick={() => {
+          if (isEditMode) {
+            setEditMode(false);
+            setMode("select");
+            setSavedFlash(true);
+            window.setTimeout(() => setSavedFlash(false), 1500);
+            return;
+          }
+
+          setEditMode(true);
+          setSavedFlash(false);
+        }}
+      >
+        {isEditMode ? <Check className="h-4 w-4 mr-1" /> : <Pencil className="h-4 w-4 mr-1" />}
+        {isEditMode ? (savedFlash ? "Сохранено ✓" : "Завершить редактирование") : "Редактировать"}
+      </Button>
+
+      <Link to="/cameras">
+        <Button variant="outline" size="sm">
+          <Table2 className="h-4 w-4 mr-1" /> Все устройства
+        </Button>
+      </Link>
+
+      <Button
+        variant={showIpLabels ? "default" : "outline"}
+        size="sm"
+        onClick={() => updateUiState({ showIpLabels: !showIpLabels })}
+      >
+        <Network className="h-4 w-4 mr-1" />
+        {showIpLabels ? "Скрыть IP адреса" : "Показать IP адреса"}
+      </Button>
 
       {isEditMode && mode === "connector" && (
-        <Select value={currentCableType} onValueChange={(value) => setCableType(value as CableType)}>
+        <Select
+          value={currentCableType}
+          onValueChange={(value) => setCableType(value as CableType)}
+        >
           <SelectTrigger className="h-9 w-36">
             <SelectValue placeholder="Тип кабеля" />
           </SelectTrigger>
@@ -273,55 +386,45 @@ export function Toolbar({
         />
       </div>
 
-      <Link to="/cameras">
-        <Button variant="outline" size="sm">
-          <Table2 className="h-4 w-4 mr-1" /> Все устройства
-        </Button>
-      </Link>
+      {isEditMode && (
+        <div className="flex items-stretch gap-1 rounded bg-muted p-0.5">
+          {toolGroups.map((group, groupIndex) => (
+            <div
+              key={group.title}
+              className={cn(
+                "flex items-center gap-0.5",
+                groupIndex > 0 && "border-l border-border pl-1.5 ml-0.5",
+              )}
+              aria-label={group.title}
+            >
+              {group.items.map((t) => (
+                <button
+                  key={t.mode}
+                  title={t.label}
+                  onClick={() => {
+                    if (t.mode !== "select") {
+                      clearSelection();
+                    }
+                    setMode(t.mode);
+                  }}
+                  className={cn(
+                    "h-8 w-8 flex items-center justify-center rounded transition-colors",
+                    mode === t.mode
+                      ? "bg-background shadow-sm text-primary"
+                      : "hover:bg-background/50",
+                  )}
+                >
+                  <t.icon className="h-4 w-4" />
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
 
-      <Button
-        variant={isEditMode ? "default" : "outline"}
-        size="sm"
-        onClick={() => {
-          if (isEditMode) {
-            setEditMode(false);
-            setMode("select");
-            setSavedFlash(true);
-            window.setTimeout(() => setSavedFlash(false), 1500);
-            return;
-          }
+      <div className="ml-auto flex items-center gap-2 flex-wrap justify-end">
+      </div>
 
-          setEditMode(true);
-          setSavedFlash(false);
-        }}
-      >
-        {isEditMode ? <Check className="h-4 w-4 mr-1" /> : <Pencil className="h-4 w-4 mr-1" />}
-        {isEditMode ? (savedFlash ? "Сохранено ✓" : "Завершить редактирование") : "Редактировать"}
-      </Button>
-
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm">
-            Файл
-            <ChevronDown className="h-4 w-4 ml-1" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          <DropdownMenuItem onClick={handleExportJson}>
-            <Download className="h-4 w-4" /> Сохранить проект
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleImport}>
-            <Upload className="h-4 w-4" /> Открыть проект
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleExportJpg}>
-            <Download className="h-4 w-4" /> Экспорт JPG
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleExportCsv}>
-            <Download className="h-4 w-4" /> Экспорт CSV
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
       <input
         ref={fileRef}
         type="file"
@@ -340,9 +443,6 @@ export function Toolbar({
           e.target.value = "";
         }}
       />
-      <span className="text-xs text-muted-foreground ml-auto hidden lg:inline">
-        Автосохранение • {new Date(savedAt).toLocaleTimeString()}
-      </span>
     </div>
   );
 }

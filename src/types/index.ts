@@ -4,6 +4,13 @@ export type CameraStatus = DeviceStatus;
 
 export type DeviceType = "camera" | "nvr" | "dvr" | "switch" | "poe_switch";
 
+export type SelectionKind = "object" | "device" | "element" | "connection";
+
+export interface SelectionItem {
+  kind: SelectionKind;
+  id: string;
+}
+
 export type CableType = "utp" | "ftp" | "coaxial" | "power";
 
 export type CableAnchor = "top" | "right" | "bottom" | "left" | "center";
@@ -54,6 +61,7 @@ export interface Device {
   y: number;
   rotation?: number;
   locked?: boolean;
+  groupId?: string | null;
   createdAt: string;
   updatedAt: string;
 
@@ -89,8 +97,15 @@ export interface MapElement {
   width: number;
   height: number;
   label?: string;
+  fontSize?: number;
   color?: string;
+  strokeWidth?: number;
+  wallShape?: "straight" | "arc";
+  curveOffset?: number;
+  doorAxis?: "horizontal" | "vertical";
+  doorSide?: "top" | "right" | "bottom" | "left";
   locked?: boolean;
+  groupId?: string | null;
   rotation?: number;
   createdAt: string;
   updatedAt: string;
@@ -117,6 +132,25 @@ export interface AppSettings {
   theme: "system" | "light" | "dark";
   masterPasswordEncryption: "todo" | "enabled";
   roomColorPreset: string;
+  uiState?: UiLayoutState;
+}
+
+export interface ViewBoxState {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface UiLayoutState {
+  viewport?: ViewBoxState;
+  viewportByFloorId?: Record<string, ViewBoxState>;
+  leftCollapsed?: boolean;
+  rightCollapsed?: boolean;
+  rightPinned?: boolean;
+  showIpLabels?: boolean;
+  activeObjectId?: string | null;
+  activeFloorId?: string | null;
 }
 
 export interface AppData {
@@ -132,6 +166,7 @@ export type EditorMode =
   | "select"
   | "room"
   | "wall"
+  | "curved_wall"
   | "door"
   | "text"
   | "camera"

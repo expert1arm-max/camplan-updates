@@ -74,6 +74,7 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const isEditMode = useStore((state) => state.isEditMode);
+  const isHydrated = useStore((state) => state.isHydrated);
   const undo = useStore((state) => state.undo);
   const redo = useStore((state) => state.redo);
   const copySelected = useStore((state) => state.copySelected);
@@ -127,6 +128,14 @@ function RootComponent() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [copySelected, isEditMode, pasteClipboard, redo, undo]);
+
+  if (!isHydrated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
+        Загрузка проекта...
+      </div>
+    );
+  }
 
   return <Outlet />;
 }

@@ -15,3 +15,7 @@
 - Renderer does not work directly with `localStorage`.
 - Import/export works through normalized app data.
 
+
+## Selection and grouping
+- Renderer keeps a multi-selection array for map objects so the right panel can switch between `Главная` and per-item tabs.
+- Grouped devices and map elements share `groupId`; the canvas expands selection to the whole group and moves all grouped members together.

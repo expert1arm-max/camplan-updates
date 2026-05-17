@@ -23,6 +23,12 @@ const DEFAULT_SETTINGS: AppData["settings"] = {
   theme: "system",
   masterPasswordEncryption: "todo",
   roomColorPreset: DEFAULT_ROOM_COLOR,
+  uiState: {
+    leftCollapsed: false,
+    rightCollapsed: false,
+    rightPinned: false,
+    showIpLabels: false,
+  },
 };
 
 const statusMap: Record<string, DeviceStatus> = {
@@ -82,6 +88,27 @@ function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+function normalizeViewport(input: unknown) {
+  if (!isRecord(input)) return undefined;
+  return {
+    x: asNumber(input.x, 0),
+    y: asNumber(input.y, 0),
+    w: asNumber(input.w, 0),
+    h: asNumber(input.h, 0),
+  };
+}
+
+function normalizeViewportMap(input: unknown) {
+  const record = asRecord(input);
+  return Object.fromEntries(
+    Object.entries(record)
+      .map(([floorId, viewport]) => [floorId, normalizeViewport(viewport)] as const)
+      .filter((entry): entry is [string, NonNullable<ReturnType<typeof normalizeViewport>>] =>
+        Boolean(entry[1]),
+      ),
+  );
+}
+
 function openDb() {
   if (typeof indexedDB === "undefined") return Promise.resolve(null);
 
@@ -135,6 +162,7 @@ async function writeRaw(value: unknown): Promise<void> {
 
 function normalizeSettings(input: unknown): AppSettings {
   const record = asRecord(input);
+  const uiState = asRecord(record.uiState);
   return {
     theme:
       record.theme === "light" || record.theme === "dark" ? record.theme : DEFAULT_SETTINGS.theme,
@@ -142,10 +170,32 @@ function normalizeSettings(input: unknown): AppSettings {
       record.masterPasswordEncryption === "enabled"
         ? "enabled"
         : DEFAULT_SETTINGS.masterPasswordEncryption,
-    roomColorPreset:
-      typeof record.roomColorPreset === "string" && record.roomColorPreset
-        ? record.roomColorPreset
-        : DEFAULT_SETTINGS.roomColorPreset,
+    roomColorPreset: DEFAULT_SETTINGS.roomColorPreset,
+    uiState: {
+      viewport: normalizeViewport(uiState.viewport),
+      viewportByFloorId: normalizeViewportMap(uiState.viewportByFloorId),
+      leftCollapsed: asBoolean(
+        uiState.leftCollapsed,
+        DEFAULT_SETTINGS.uiState?.leftCollapsed ?? false,
+      ),
+      rightCollapsed: asBoolean(
+        uiState.rightCollapsed,
+        DEFAULT_SETTINGS.uiState?.rightCollapsed ?? false,
+      ),
+      rightPinned: asBoolean(uiState.rightPinned, DEFAULT_SETTINGS.uiState?.rightPinned ?? false),
+      showIpLabels: asBoolean(
+        uiState.showIpLabels,
+        DEFAULT_SETTINGS.uiState?.showIpLabels ?? false,
+      ),
+      activeObjectId:
+        typeof uiState.activeObjectId === "string" || uiState.activeObjectId === null
+          ? uiState.activeObjectId
+          : undefined,
+      activeFloorId:
+        typeof uiState.activeFloorId === "string" || uiState.activeFloorId === null
+          ? uiState.activeFloorId
+          : undefined,
+    },
   };
 }
 
@@ -219,12 +269,7 @@ function normalizeAnchor(value: unknown): CableAnchor {
     : "center";
 }
 
-function normalizeEndpoint(
-  input: unknown,
-  fallbackDeviceId: string,
-  fallbackX = 0,
-  fallbackY = 0,
-) {
+function normalizeEndpoint(input: unknown, fallbackDeviceId: string, fallbackX = 0, fallbackY = 0) {
   const record = asRecord(input);
   const deviceId = asString(record.deviceId, fallbackDeviceId) || undefined;
   return {
@@ -269,13 +314,18 @@ function normalizeDevice(input: unknown): Device {
         ? undefined
         : asNumber(record.storageCapacityTb, 0) || 0,
     hddCount: record.hddCount === undefined ? undefined : asNumber(record.hddCount, 0) || 0,
-    connectedCameraIds: asArray(record.connectedCameraIds).filter((item) => typeof item === "string"),
+    connectedCameraIds: asArray(record.connectedCameraIds).filter(
+      (item) => typeof item === "string",
+    ),
     portCount: record.portCount === undefined ? undefined : asNumber(record.portCount, 0) || 0,
     poePortCount:
       record.poePortCount === undefined ? undefined : asNumber(record.poePortCount, 0) || 0,
     poeBudgetW: record.poeBudgetW === undefined ? undefined : asNumber(record.poeBudgetW, 0) || 0,
-    uplinkPorts: record.uplinkPorts === undefined ? undefined : asNumber(record.uplinkPorts, 0) || 0,
-    connectedDeviceIds: asArray(record.connectedDeviceIds).filter((item) => typeof item === "string"),
+    uplinkPorts:
+      record.uplinkPorts === undefined ? undefined : asNumber(record.uplinkPorts, 0) || 0,
+    connectedDeviceIds: asArray(record.connectedDeviceIds).filter(
+      (item) => typeof item === "string",
+    ),
     lastCheckedAt: asString(record.lastCheckedAt ?? record.lastChecked, ""),
     responsiblePerson: asString(record.responsiblePerson ?? record.responsible, ""),
   };
@@ -293,8 +343,14 @@ function normalizeConnection(input: unknown): DeviceConnection {
     id: asString(record.id, crypto.randomUUID()),
     objectId: asString(record.objectId, ""),
     floorId: asString(record.floorId, ""),
-    type: cableTypeMap[asString(record.type ?? record.cableType ?? record.connectionType, "")] ?? "utp",
-    from: normalizeEndpoint(fromRecord, fromDeviceId, asNumber(fromRecord.x, 0), asNumber(fromRecord.y, 0)),
+    type:
+      cableTypeMap[asString(record.type ?? record.cableType ?? record.connectionType, "")] ?? "utp",
+    from: normalizeEndpoint(
+      fromRecord,
+      fromDeviceId,
+      asNumber(fromRecord.x, 0),
+      asNumber(fromRecord.y, 0),
+    ),
     to: normalizeEndpoint(toRecord, toDeviceId, asNumber(toRecord.x, 0), asNumber(toRecord.y, 0)),
     points,
     label: typeof record.label === "string" && record.label ? record.label : undefined,
@@ -312,7 +368,9 @@ export function normalizeAppData(input: unknown): AppData {
   const rawFloors = asArray(record.floors);
   const rawElements = asArray(record.mapElements ?? record.elements);
   const rawDevices = asArray(record.devices ?? record.cameras);
-  const rawConnections = asArray(record.deviceConnections ?? record.deviceCables ?? record.connections);
+  const rawConnections = asArray(
+    record.deviceConnections ?? record.deviceCables ?? record.connections,
+  );
 
   const objects = rawObjects.map((item) => normalizeObject(item));
   const floors = rawFloors.map((item, index) => normalizeFloor(item, index));
