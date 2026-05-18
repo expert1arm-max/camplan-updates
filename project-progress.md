@@ -204,4 +204,5 @@
 - Selected wall endpoint dragging now uses the live pointer distance, so existing walls can be resized and re-angled with the same feel as a newly drawn wall.
 - Room tool can now start a new room even when the cursor is over an existing room, so existing geometry no longer blocks room creation.
 - Switching to any non-select tool now clears current map selection immediately, so previously marked objects no longer stay highlighted while drawing.
+- Added GitHub Actions release workflow that publishes Windows installer assets on tag push `v*` into the GitHub release repo configured for `electron-updater`.
 

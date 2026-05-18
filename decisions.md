@@ -7,4 +7,4 @@
 - Пароль скрыт по умолчанию.
 - Для импорта старых данных есть нормализация legacy-полей.
 - Сохранён Lovable-ориентированный desktop layout.
-
+- Windows releases publish through GitHub Actions + GitHub Releases, and `electron-updater` points to the release repo from `package.json`.

@@ -21,3 +21,8 @@
 - `npm run build` собирает frontend.
 - `npm run dist:win` собирает Windows installer.
 - `npm run dist:portable` собирает portable `.exe`.
+
+## GitHub Releases
+- Release automation uses GitHub Actions.
+- Tag push `v*` builds the Windows installer and publishes release assets.
+- `electron-updater` downloads updates from the GitHub release repo configured in `package.json`.
