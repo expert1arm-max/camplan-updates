@@ -166,9 +166,13 @@ async function fetchLatestGithubRelease() {
   }
 
   const url = `https://api.github.com/repos/${repo.owner}/${repo.repo}/releases/latest`;
+  const controller = new AbortController();
+  const timeoutMs = 7000;
+  const timeoutId = setTimeout(() => controller.abort(new Error("GitHub API timeout")), timeoutMs);
 
   try {
     const response = await fetch(url, {
+      signal: controller.signal,
       headers: {
         accept: "application/vnd.github+json",
         "user-agent": "CCTV Manager",
@@ -200,10 +204,19 @@ async function fetchLatestGithubRelease() {
       htmlUrl: data.html_url,
     };
   } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      return {
+        state: "error",
+        message: "GitHub Releases не ответил за 7 секунд.",
+      };
+    }
+
     return {
       state: "error",
       message: error instanceof Error ? error.message : "Не удалось получить релиз GitHub.",
     };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
