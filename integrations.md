@@ -25,6 +25,6 @@
 - Release automation uses GitHub Actions.
 - Tag push `v*` builds the Windows installer and publishes release assets.
 - `electron-updater` downloads updates from the GitHub release repo configured in `package.json`.
-- Manual update check in the app uses the same GitHub updater source.
+- Manual update check in the app reads the latest GitHub release directly from the GitHub API for the repo configured in `package.json`.
 - The update dialog compares the local app version with the GitHub version and only enables the update action when they differ.
 - The update dialog can still listen to IPC progress events from Electron main while an actual download is running.

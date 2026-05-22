@@ -73,6 +73,13 @@ declare global {
   interface Window {
     cctvDesktop?: {
       getAppVersion: () => Promise<string>;
+      getLatestReleaseVersion: () => Promise<{
+        state: "available" | "error";
+        version?: string;
+        tagName?: string;
+        htmlUrl?: string;
+        message?: string;
+      }>;
       checkForUpdates: () => Promise<{
         state: "disabled" | "not-available" | "available" | "error";
         message: string;
@@ -403,28 +410,25 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
       return;
     }
 
-    const result = await bridge.checkForUpdates();
-
-    if (result.state === "not-available") {
-      setGithubVersion(appVersion);
-      setUpdatePhase("done");
-      setUpdateProgress(null);
-      setUpdateMessage("Обновлено до последней версии.");
-      return;
-    }
+    const result = await bridge.getLatestReleaseVersion();
 
     if (result.state === "available" && result.version) {
       setGithubVersion(result.version);
       setUpdatePhase("done");
       setUpdateProgress(null);
+      if (result.version === appVersion) {
+        setUpdateMessage("Обновлено до последней версии.");
+        return;
+      }
+
       setUpdateMessage(`Доступна версия ${result.version}.`);
       return;
     }
 
-    if (result.state === "error" || result.state === "disabled") {
+    if (result.state === "error") {
       setUpdatePhase("error");
       setUpdateProgress(null);
-      setUpdateMessage(result.message);
+      setUpdateMessage(result.message || "Не удалось получить версию GitHub Releases.");
     }
   };
 

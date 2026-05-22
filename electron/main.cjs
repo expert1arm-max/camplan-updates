@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
+﻿const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const http = require("node:http");
 const path = require("node:path");
@@ -131,6 +131,82 @@ function sendUpdateEvent(payload) {
   mainWindow.webContents.send("app:update-event", payload);
 }
 
+let packageConfig;
+
+function getPackageConfig() {
+  if (!packageConfig) {
+    packageConfig = require(path.join(app.getAppPath(), "package.json"));
+  }
+
+  return packageConfig;
+}
+
+function getGithubReleaseRepo() {
+  const publish = getPackageConfig()?.build?.publish;
+  const firstPublish = Array.isArray(publish) ? publish[0] : null;
+  const owner = firstPublish?.owner;
+  const repo = firstPublish?.repo;
+
+  if (!owner || !repo) {
+    return null;
+  }
+
+  return { owner, repo };
+}
+
+function normalizeReleaseVersion(tagName, name) {
+  const raw = String(tagName || name || "").trim();
+  return raw.replace(/^v/i, "");
+}
+
+async function fetchLatestGithubRelease() {
+  const repo = getGithubReleaseRepo();
+  if (!repo) {
+    return { state: "error", message: "Не найден репозиторий обновлений в package.json." };
+  }
+
+  const url = `https://api.github.com/repos/${repo.owner}/${repo.repo}/releases/latest`;
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        accept: "application/vnd.github+json",
+        "user-agent": "CCTV Manager",
+        "x-github-api-version": "2022-11-28",
+      },
+    });
+
+    if (!response.ok) {
+      return {
+        state: "error",
+        message: `Не удалось получить релиз GitHub (${response.status}).`,
+      };
+    }
+
+    const data = await response.json();
+    const version = normalizeReleaseVersion(data.tag_name, data.name);
+
+    if (!version) {
+      return {
+        state: "error",
+        message: "GitHub release не содержит version/tag.",
+      };
+    }
+
+    return {
+      state: "available",
+      version,
+      tagName: data.tag_name,
+      htmlUrl: data.html_url,
+    };
+  } catch (error) {
+    return {
+      state: "error",
+      message: error instanceof Error ? error.message : "Не удалось получить релиз GitHub.",
+    };
+  }
+}
+
 app.setAppUserModelId("com.camplan.cctvmanager");
 
 app.whenReady().then(() => {
@@ -138,37 +214,23 @@ app.whenReady().then(() => {
   autoUpdater.autoDownload = false;
 
   ipcMain.handle("app:get-version", () => app.getVersion());
+  ipcMain.handle("app:get-latest-release-version", async () => fetchLatestGithubRelease());
 
   ipcMain.handle("app:check-for-updates", async () => {
-    if (!app.isPackaged) {
-      return {
-        state: "disabled",
-        message: "Проверка обновлений доступна в собранной версии приложения.",
-      };
-    }
+    const release = await fetchLatestGithubRelease();
 
-    try {
-      const result = await autoUpdater.checkForUpdates();
-      const updateInfo = result?.updateInfo;
-
-      if (!updateInfo) {
-        return {
-          state: "not-available",
-          message: `Установлена последняя версия ${app.getVersion()}.`,
-        };
-      }
-
+    if (release.state === "available") {
       return {
         state: "available",
-        message: `Доступна версия ${updateInfo.version}. Проверь GitHub Releases для загрузки обновления.`,
-        version: updateInfo.version,
-      };
-    } catch (error) {
-      return {
-        state: "error",
-        message: error instanceof Error ? error.message : "Не удалось проверить обновления.",
+        version: release.version,
+        message: `Доступна версия ${release.version} на GitHub Releases.`,
       };
     }
+
+    return {
+      state: "error",
+      message: release.message || "Не удалось получить версию GitHub Releases.",
+    };
   });
 
   ipcMain.handle("app:check-and-download-update", async () => {

@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("cctvDesktop", {
   platform: process.platform,
   getAppVersion: () => ipcRenderer.invoke("app:get-version"),
+  getLatestReleaseVersion: () => ipcRenderer.invoke("app:get-latest-release-version"),
   checkForUpdates: () => ipcRenderer.invoke("app:check-for-updates"),
   checkAndDownloadUpdate: () => ipcRenderer.invoke("app:check-and-download-update"),
   onUpdateEvent: (callback) => {
