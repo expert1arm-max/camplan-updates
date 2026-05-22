@@ -99,6 +99,7 @@ async function createWindow() {
     minHeight: 820,
     backgroundColor: "#0f172a",
     title: "CCTV Manager",
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -109,11 +110,13 @@ async function createWindow() {
   });
 
   if (isDev) {
+    win.setMenuBarVisibility(false);
     win.loadURL(devUrl);
     win.webContents.openDevTools({ mode: "detach" });
     return;
   }
 
+  win.setMenuBarVisibility(false);
   const port = await startProductionServer();
   await win.loadURL(`http://127.0.0.1:${port}`);
 }
@@ -121,6 +124,8 @@ async function createWindow() {
 app.setAppUserModelId("com.camplan.cctvmanager");
 
 app.whenReady().then(() => {
+  app.setApplicationMenu(null);
+
   ipcMain.handle("app:get-version", () => app.getVersion());
 
   ipcMain.handle("app:check-for-updates", async () => {
