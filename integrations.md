@@ -26,3 +26,4 @@
 - Tag push `v*` builds the Windows installer and publishes release assets.
 - `electron-updater` downloads updates from the GitHub release repo configured in `package.json`.
 - Manual update check in the app uses the same GitHub updater source.
+- The update dialog listens to IPC progress events from Electron main so it can show checking state, download progress, and the final latest-version message.

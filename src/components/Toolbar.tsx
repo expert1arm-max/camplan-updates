@@ -52,7 +52,23 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+
+type UpdateProgress = {
+  percent: number;
+  transferred: number;
+  total: number;
+  bytesPerSecond: number;
+};
+
+type UpdateEvent =
+  | { type: "checking"; message: string }
+  | { type: "available"; version: string; message: string }
+  | { type: "progress"; progress: UpdateProgress }
+  | { type: "not-available"; message: string }
+  | { type: "downloaded"; version: string; message: string }
+  | { type: "error"; message: string };
 
 declare global {
   interface Window {
@@ -63,6 +79,12 @@ declare global {
         message: string;
         version?: string;
       }>;
+      checkAndDownloadUpdate: () => Promise<{
+        state: "disabled" | "not-available" | "downloaded" | "error";
+        message: string;
+        version?: string;
+      }>;
+      onUpdateEvent: (callback: (event: UpdateEvent) => void) => () => void;
       openJsonFile: () => Promise<string | null>;
       openExternal: (url: string) => Promise<boolean>;
       saveTextFile: (payload: {
@@ -114,6 +136,34 @@ const toolGroups: { title: string; items: { mode: EditorMode; icon: typeof Squar
     },
   ];
 
+function formatBytes(value: number) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return "0 B";
+  }
+
+  const units = ["B", "KB", "MB", "GB"];
+  let size = value;
+  let unitIndex = 0;
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${size >= 10 || unitIndex === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[unitIndex]}`;
+}
+
+function formatDownloadProgress(progress: UpdateProgress | null) {
+  if (!progress) {
+    return "Ожидание данных...";
+  }
+
+  const transferred = formatBytes(progress.transferred);
+  const total = formatBytes(progress.total);
+  const speed = progress.bytesPerSecond > 0 ? ` • ${formatBytes(progress.bytesPerSecond)}/с` : "";
+  return `${transferred} / ${total}${speed}`;
+}
+
 export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: string) => void }) {
   const {
     mode,
@@ -136,7 +186,8 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
   const [updateOpen, setUpdateOpen] = useState(false);
   const [appVersion, setAppVersion] = useState("0.1.1");
   const [updateMessage, setUpdateMessage] = useState("");
-  const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
+  const [updatePhase, setUpdatePhase] = useState<"idle" | "checking" | "downloading" | "done" | "error">("idle");
+  const [updateProgress, setUpdateProgress] = useState<UpdateProgress | null>(null);
   const showIpLabels = settings.uiState?.showIpLabels ?? false;
 
   useEffect(() => {
@@ -153,6 +204,49 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
     return () => {
       alive = false;
     };
+  }, []);
+
+  useEffect(() => {
+    const bridge = window.cctvDesktop;
+    if (!bridge?.onUpdateEvent) return undefined;
+
+    return bridge.onUpdateEvent((event) => {
+      if (!event || typeof event !== "object") return;
+
+      switch (event.type) {
+        case "checking":
+          setUpdateOpen(true);
+          setUpdatePhase("checking");
+          setUpdateProgress(null);
+          setUpdateMessage(event.message);
+          break;
+        case "available":
+          setUpdateOpen(true);
+          setUpdatePhase("downloading");
+          setUpdateMessage(event.message);
+          break;
+        case "progress":
+          setUpdateOpen(true);
+          setUpdatePhase("downloading");
+          setUpdateProgress(event.progress);
+          break;
+        case "not-available":
+          setUpdatePhase("done");
+          setUpdateProgress(null);
+          setUpdateMessage(event.message);
+          break;
+        case "downloaded":
+          setUpdatePhase("done");
+          setUpdateProgress(null);
+          setUpdateMessage(event.message);
+          break;
+        case "error":
+          setUpdatePhase("error");
+          setUpdateProgress(null);
+          setUpdateMessage(event.message);
+          break;
+      }
+    });
   }, []);
 
   const saveFile = async (
@@ -296,23 +390,45 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
 
   const handleUpdateCheck = async () => {
     setUpdateOpen(true);
-    setIsCheckingUpdates(true);
+    setUpdatePhase("checking");
+    setUpdateProgress(null);
     setUpdateMessage("Проверяем обновления на GitHub...");
 
     const bridge = window.cctvDesktop;
     if (!bridge) {
-      setIsCheckingUpdates(false);
+      setUpdatePhase("error");
       setUpdateMessage("Проверка обновлений доступна только в Electron.");
       return;
     }
 
-    const result = await bridge.checkForUpdates();
-    setIsCheckingUpdates(false);
+    const result = await bridge.checkAndDownloadUpdate();
+
     if (result.state === "not-available") {
+      setUpdatePhase("done");
+      setUpdateProgress(null);
       setUpdateMessage("Обновлено до последней версии.");
       return;
     }
-    setUpdateMessage(result.message);
+
+    if (result.state === "downloaded") {
+      setUpdatePhase("done");
+      setUpdateProgress(null);
+      setUpdateMessage(result.message);
+      return;
+    }
+
+    if (result.state === "error") {
+      setUpdatePhase("error");
+      setUpdateProgress(null);
+      setUpdateMessage(result.message);
+      return;
+    }
+
+    if (result.state === "disabled") {
+      setUpdatePhase("error");
+      setUpdateProgress(null);
+      setUpdateMessage(result.message);
+    }
   };
 
   return (
@@ -389,23 +505,51 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={updateOpen} onOpenChange={setUpdateOpen}>
+      <AlertDialog
+        open={updateOpen}
+        onOpenChange={(open) => {
+          if (!open && (updatePhase === "checking" || updatePhase === "downloading")) {
+            return;
+          }
+
+          setUpdateOpen(open);
+
+          if (!open) {
+            setUpdatePhase("idle");
+            setUpdateProgress(null);
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Обновить программу</AlertDialogTitle>
             <AlertDialogDescription className="space-y-3">
-              {isCheckingUpdates ? (
+              {updatePhase === "checking" ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <LoaderCircle className="h-4 w-4 animate-spin" />
                   <span>{updateMessage}</span>
                 </div>
-              ) : (
-                <div>{updateMessage}</div>
-              )}
+              ) : null}
+
+              {updatePhase === "downloading" ? (
+                <div className="space-y-3">
+                  <div className="text-sm text-muted-foreground">{updateMessage}</div>
+                  <Progress value={updateProgress?.percent ?? 0} className="h-2" />
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{Math.round(updateProgress?.percent ?? 0)}%</span>
+                    <span>{formatDownloadProgress(updateProgress)}</span>
+                  </div>
+                </div>
+              ) : null}
+
+              {updatePhase === "done" || updatePhase === "error" ? <div>{updateMessage}</div> : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setUpdateOpen(false)} disabled={isCheckingUpdates}>
+            <AlertDialogAction
+              onClick={() => setUpdateOpen(false)}
+              disabled={updatePhase === "checking" || updatePhase === "downloading"}
+            >
               Ок
             </AlertDialogAction>
           </AlertDialogFooter>

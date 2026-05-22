@@ -4,6 +4,12 @@ contextBridge.exposeInMainWorld("cctvDesktop", {
   platform: process.platform,
   getAppVersion: () => ipcRenderer.invoke("app:get-version"),
   checkForUpdates: () => ipcRenderer.invoke("app:check-for-updates"),
+  checkAndDownloadUpdate: () => ipcRenderer.invoke("app:check-and-download-update"),
+  onUpdateEvent: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("app:update-event", listener);
+    return () => ipcRenderer.removeListener("app:update-event", listener);
+  },
   openJsonFile: () => ipcRenderer.invoke("dialog:open-json"),
   openExternal: (url) => ipcRenderer.invoke("shell:open-external", url),
   saveTextFile: (payload) => ipcRenderer.invoke("dialog:save-text", payload),

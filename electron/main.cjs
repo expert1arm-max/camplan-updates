@@ -8,6 +8,7 @@ const fs = require("fs/promises");
 const isDev = !app.isPackaged;
 const devUrl = process.env.VITE_DEV_SERVER_URL || "http://127.0.0.1:5173";
 let server;
+let mainWindow;
 
 function getMimeType(filePath) {
   if (filePath.endsWith(".css")) return "text/css; charset=utf-8";
@@ -108,6 +109,7 @@ async function createWindow() {
       webSecurity: true,
     },
   });
+  mainWindow = win;
 
   if (isDev) {
     win.setMenuBarVisibility(false);
@@ -121,10 +123,19 @@ async function createWindow() {
   await win.loadURL(`http://127.0.0.1:${port}`);
 }
 
+function sendUpdateEvent(payload) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  mainWindow.webContents.send("app:update-event", payload);
+}
+
 app.setAppUserModelId("com.camplan.cctvmanager");
 
 app.whenReady().then(() => {
   app.setApplicationMenu(null);
+  autoUpdater.autoDownload = false;
 
   ipcMain.handle("app:get-version", () => app.getVersion());
 
@@ -158,6 +169,74 @@ app.whenReady().then(() => {
         message: error instanceof Error ? error.message : "Не удалось проверить обновления.",
       };
     }
+  });
+
+  ipcMain.handle("app:check-and-download-update", async () => {
+    if (!app.isPackaged) {
+      return {
+        state: "disabled",
+        message: "Проверка обновлений доступна в собранной версии приложения.",
+      };
+    }
+
+    try {
+      sendUpdateEvent({
+        type: "checking",
+        message: "Проверяем обновления на GitHub...",
+      });
+
+      const result = await autoUpdater.checkForUpdates();
+
+      if (!result?.isUpdateAvailable) {
+        const message = "Обновлено до последней версии.";
+        sendUpdateEvent({ type: "not-available", message });
+        return {
+          state: "not-available",
+          message,
+        };
+      }
+
+      const updateVersion = result.updateInfo.version;
+      sendUpdateEvent({
+        type: "available",
+        version: updateVersion,
+        message: `Найдена версия ${updateVersion}. Начинаем загрузку...`,
+      });
+
+      await autoUpdater.downloadUpdate();
+
+      const message = `Обновление ${updateVersion} скачано. Перезапустите программу, чтобы установить его.`;
+      sendUpdateEvent({
+        type: "downloaded",
+        version: updateVersion,
+        message,
+      });
+
+      return {
+        state: "downloaded",
+        message,
+        version: updateVersion,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Не удалось проверить обновления.";
+      sendUpdateEvent({ type: "error", message });
+      return {
+        state: "error",
+        message,
+      };
+    }
+  });
+
+  autoUpdater.on("download-progress", (progress) => {
+    sendUpdateEvent({
+      type: "progress",
+      progress: {
+        percent: progress.percent,
+        transferred: progress.transferred,
+        total: progress.total,
+        bytesPerSecond: progress.bytesPerSecond,
+      },
+    });
   });
 
   ipcMain.handle("dialog:open-json", async () => {
@@ -213,10 +292,6 @@ app.whenReady().then(() => {
   });
 
   void createWindow();
-
-  if (app.isPackaged) {
-    autoUpdater.checkForUpdatesAndNotify();
-  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
