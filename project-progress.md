@@ -106,7 +106,7 @@
 
 ## Не проверено вручную
 
-- Ручной запуск свежего Windows installer `release\CCTV Manager Setup 0.1.1.exe`.
+- Ручной запуск свежего Windows installer `release\CCTV Manager Setup 0.1.2.exe`.
 - Полный сценарий создания объекта, зоны, устройств, элементов плана и кабеля в Electron-окне.
 - Сохранение и открытие проекта через меню `Файл`.
 - JPG export плана.
