@@ -20,11 +20,6 @@ npm run build
 npm run dist:win
 ```
 
-## Portable EXE
-```bash
-npm run dist:portable
-```
-
 ## GitHub release
 - GitHub Actions workflow publishes Windows releases on tag push `v*`.
 - Release build uses `electron-builder --win nsis --publish always`.
@@ -33,4 +28,4 @@ npm run dist:portable
 ## Output
 - Frontend build goes to `dist/`.
 - Electron packaging output goes to `release/`.
-- Portable build outputs a single `.exe` in `release/`.
+- Windows installer output goes to `release/` together with update metadata.

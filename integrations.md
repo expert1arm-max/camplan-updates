@@ -20,7 +20,6 @@
 ## Packaging
 - `npm run build` собирает frontend.
 - `npm run dist:win` собирает Windows installer.
-- `npm run dist:portable` собирает portable `.exe`.
 
 ## GitHub Releases
 - Release automation uses GitHub Actions.

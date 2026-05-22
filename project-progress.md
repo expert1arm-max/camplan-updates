@@ -78,21 +78,12 @@
   - `npm run dev:desktop`
   - `npm run build`
   - `npm run dist:win`
-  - `npm run dist:portable`
 
 ## Проверено
 
 - `npm run build` проходит.
 - `src\components\Sidebar.tsx` проходит точечный ESLint.
 - `npm run dist:win` собирает Windows installer.
-- `npm run dist:portable` собирает single-file portable `.exe`.
-- 09.05.2026 собран свежий portable EXE: `release\CCTV Manager 0.1.0.exe` размером 126566134 bytes.
-- 09.05.2026 после исправления selection hit area пересобран portable EXE: `release\CCTV Manager 0.1.0.exe` размером 126566744 bytes.
-- 09.05.2026 после redesign левой sidebar-панели пересобран portable EXE: `release\CCTV Manager 0.1.0.exe` размером 126565829 bytes.
-- 09.05.2026 после добавления resize `Room` по краям и углам пересобран portable EXE: `release\CCTV Manager 0.1.0.exe` размером 126562763 bytes.
-- 14.05.2026 после корректировки плотности `Ctrl+0` fit пересобран portable EXE: `release\CCTV Manager 0.1.0.exe` размером 126587410 bytes.
-- 14.05.2026 после полной переписи математики `Ctrl+0`/fit to view пересобран portable EXE: `release\CCTV Manager 0.1.0.exe` размером 126585226 bytes.
-- 14.05.2026 после добавления DOM overlap detection для `Ctrl+0` пересобран portable EXE: `release\CCTV Manager 0.1.0.exe` размером 126585750 bytes.
 - 14.05.2026 исправлена высота центральной рабочей области: `PlanCanvas` теперь занимает всю доступную высоту между toolbar и нижним краем окна, а SVG/grid растянуты на весь контейнер.
 - 15.05.2026 после доработки старта без demo data, восстановления snapshot и empty-state `npm.cmd run build` проходит.
 - 15.05.2026 empty-state централизован: в пустом проекте показана центральная CTA-кнопка `+` для открытия JSON-проекта, а центральная подсказка больше не использует испорченный текст.
@@ -105,7 +96,7 @@
 
 ## Не проверено вручную
 
-- Ручной запуск свежего portable EXE `release\CCTV Manager 0.1.0.exe`.
+- Ручной запуск свежего Windows installer `release\CCTV Manager Setup 0.1.1.exe`.
 - Полный сценарий создания объекта, зоны, устройств, элементов плана и кабеля в Electron-окне.
 - Сохранение и открытие проекта через меню `Файл`.
 - JPG export плана.
