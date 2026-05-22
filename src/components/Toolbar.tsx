@@ -12,6 +12,7 @@ import {
   Network,
   Pencil,
   Minus,
+  LoaderCircle,
   RotateCcw,
   Search,
   Server,
@@ -135,6 +136,7 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
   const [updateOpen, setUpdateOpen] = useState(false);
   const [appVersion, setAppVersion] = useState("0.1.1");
   const [updateMessage, setUpdateMessage] = useState("");
+  const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
   const showIpLabels = settings.uiState?.showIpLabels ?? false;
 
   useEffect(() => {
@@ -293,16 +295,23 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
   };
 
   const handleUpdateCheck = async () => {
-    setUpdateMessage("Проверяем обновления на GitHub...");
     setUpdateOpen(true);
+    setIsCheckingUpdates(true);
+    setUpdateMessage("Проверяем обновления на GitHub...");
 
     const bridge = window.cctvDesktop;
     if (!bridge) {
+      setIsCheckingUpdates(false);
       setUpdateMessage("Проверка обновлений доступна только в Electron.");
       return;
     }
 
     const result = await bridge.checkForUpdates();
+    setIsCheckingUpdates(false);
+    if (result.state === "not-available") {
+      setUpdateMessage("Обновлено до последней версии.");
+      return;
+    }
     setUpdateMessage(result.message);
   };
 
@@ -384,10 +393,21 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Обновить программу</AlertDialogTitle>
-            <AlertDialogDescription>{updateMessage}</AlertDialogDescription>
+            <AlertDialogDescription className="space-y-3">
+              {isCheckingUpdates ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                  <span>{updateMessage}</span>
+                </div>
+              ) : (
+                <div>{updateMessage}</div>
+              )}
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setUpdateOpen(false)}>Ок</AlertDialogAction>
+            <AlertDialogAction onClick={() => setUpdateOpen(false)} disabled={isCheckingUpdates}>
+              Ок
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
