@@ -12,7 +12,6 @@ import {
   Network,
   Pencil,
   Minus,
-  LoaderCircle,
   RotateCcw,
   Search,
   Server,
@@ -185,10 +184,12 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
   const [aboutOpen, setAboutOpen] = useState(false);
   const [updateOpen, setUpdateOpen] = useState(false);
   const [appVersion, setAppVersion] = useState("0.1.1");
+  const [githubVersion, setGithubVersion] = useState<string | null>(null);
   const [updateMessage, setUpdateMessage] = useState("");
   const [updatePhase, setUpdatePhase] = useState<"idle" | "checking" | "downloading" | "done" | "error">("idle");
   const [updateProgress, setUpdateProgress] = useState<UpdateProgress | null>(null);
   const showIpLabels = settings.uiState?.showIpLabels ?? false;
+  const updateAvailable = Boolean(githubVersion && githubVersion !== appVersion);
 
   useEffect(() => {
     const bridge = window.cctvDesktop;
@@ -388,11 +389,12 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
     setAboutOpen(true);
   };
 
-  const handleUpdateCheck = async () => {
+  const handleUpdateOpen = async () => {
     setUpdateOpen(true);
     setUpdatePhase("checking");
     setUpdateProgress(null);
-    setUpdateMessage("Проверяем обновления на GitHub...");
+    setGithubVersion(null);
+    setUpdateMessage("Проверяем версию на GitHub...");
 
     const bridge = window.cctvDesktop;
     if (!bridge) {
@@ -401,9 +403,45 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
       return;
     }
 
+    const result = await bridge.checkForUpdates();
+
+    if (result.state === "not-available") {
+      setGithubVersion(appVersion);
+      setUpdatePhase("done");
+      setUpdateProgress(null);
+      setUpdateMessage("Обновлено до последней версии.");
+      return;
+    }
+
+    if (result.state === "available" && result.version) {
+      setGithubVersion(result.version);
+      setUpdatePhase("done");
+      setUpdateProgress(null);
+      setUpdateMessage(`Доступна версия ${result.version}.`);
+      return;
+    }
+
+    if (result.state === "error" || result.state === "disabled") {
+      setUpdatePhase("error");
+      setUpdateProgress(null);
+      setUpdateMessage(result.message);
+    }
+  };
+
+  const handleUpdateInstall = async () => {
+    const bridge = window.cctvDesktop;
+    if (!bridge || !updateAvailable) {
+      return;
+    }
+
+    setUpdatePhase("downloading");
+    setUpdateProgress(null);
+    setUpdateMessage(`Скачиваем версию ${githubVersion}...`);
+
     const result = await bridge.checkAndDownloadUpdate();
 
     if (result.state === "not-available") {
+      setGithubVersion(appVersion);
       setUpdatePhase("done");
       setUpdateProgress(null);
       setUpdateMessage("Обновлено до последней версии.");
@@ -411,20 +449,14 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
     }
 
     if (result.state === "downloaded") {
+      setGithubVersion(result.version ?? githubVersion);
       setUpdatePhase("done");
       setUpdateProgress(null);
       setUpdateMessage(result.message);
       return;
     }
 
-    if (result.state === "error") {
-      setUpdatePhase("error");
-      setUpdateProgress(null);
-      setUpdateMessage(result.message);
-      return;
-    }
-
-    if (result.state === "disabled") {
+    if (result.state === "error" || result.state === "disabled") {
       setUpdatePhase("error");
       setUpdateProgress(null);
       setUpdateMessage(result.message);
@@ -523,17 +555,26 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Обновить программу</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-3">
-              {updatePhase === "checking" ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <LoaderCircle className="h-4 w-4 animate-spin" />
-                  <span>{updateMessage}</span>
+            <AlertDialogDescription className="space-y-4">
+              <div className="space-y-2 rounded-md border bg-muted/30 p-3 text-sm">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-muted-foreground">Данная версия</span>
+                  <span className="font-medium">{appVersion}</span>
                 </div>
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-muted-foreground">Версия на GitHub</span>
+                  <span className="font-medium">
+                    {githubVersion ?? (updatePhase === "checking" ? "Проверяем..." : "Не определена")}
+                  </span>
+                </div>
+              </div>
+
+              {updatePhase !== "idle" && updateMessage ? (
+                <div className="text-sm text-muted-foreground">{updateMessage}</div>
               ) : null}
 
               {updatePhase === "downloading" ? (
                 <div className="space-y-3">
-                  <div className="text-sm text-muted-foreground">{updateMessage}</div>
                   <Progress value={updateProgress?.percent ?? 0} className="h-2" />
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>{Math.round(updateProgress?.percent ?? 0)}%</span>
@@ -541,17 +582,13 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
                   </div>
                 </div>
               ) : null}
-
-              {updatePhase === "done" || updatePhase === "error" ? <div>{updateMessage}</div> : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction
-              onClick={() => setUpdateOpen(false)}
-              disabled={updatePhase === "checking" || updatePhase === "downloading"}
-            >
-              Ок
-            </AlertDialogAction>
+            <AlertDialogCancel onClick={() => setUpdateOpen(false)}>Закрыть</AlertDialogCancel>
+            <Button onClick={handleUpdateInstall} disabled={!updateAvailable || updatePhase === "checking" || updatePhase === "downloading"}>
+              Обновить
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -597,7 +634,7 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           <DropdownMenuItem onClick={handleAboutOpen}>О программе</DropdownMenuItem>
-          <DropdownMenuItem onClick={handleUpdateCheck}>Обновить программу</DropdownMenuItem>
+          <DropdownMenuItem onClick={handleUpdateOpen}>Обновить программу</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
