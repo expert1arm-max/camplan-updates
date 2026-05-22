@@ -188,7 +188,6 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
   const fileRef = useRef<HTMLInputElement>(null);
   const [savedFlash, setSavedFlash] = useState(false);
   const [newProjectPromptOpen, setNewProjectPromptOpen] = useState(false);
-  const [aboutOpen, setAboutOpen] = useState(false);
   const [updateOpen, setUpdateOpen] = useState(false);
   const [appVersion, setAppVersion] = useState("0.1.1");
   const [githubVersion, setGithubVersion] = useState<string | null>(null);
@@ -392,10 +391,6 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
     newProject();
   };
 
-  const handleAboutOpen = () => {
-    setAboutOpen(true);
-  };
-
   const handleUpdateOpen = async () => {
     setUpdateOpen(true);
     setUpdatePhase("checking");
@@ -525,22 +520,6 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={aboutOpen} onOpenChange={setAboutOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>О программе</AlertDialogTitle>
-            <AlertDialogDescription>
-              CCTV Manager
-              <br />
-              Версия: {appVersion}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setAboutOpen(false)}>Ок</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       <AlertDialog
         open={updateOpen}
         onOpenChange={(open) => {
@@ -628,19 +607,10 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
         </Button>
       </Link>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm">
-            <CircleHelp className="h-4 w-4 mr-1" />
-            Помощь
-            <ChevronDown className="h-4 w-4 ml-1" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          <DropdownMenuItem onClick={handleAboutOpen}>О программе</DropdownMenuItem>
-          <DropdownMenuItem onClick={handleUpdateOpen}>Обновить программу</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <Button variant="outline" size="sm" onClick={handleUpdateOpen}>
+        <CircleHelp className="h-4 w-4 mr-1" />
+        О программе
+      </Button>
 
       <Button
         variant={showIpLabels ? "default" : "outline"}
