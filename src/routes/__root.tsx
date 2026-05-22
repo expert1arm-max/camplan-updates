@@ -4,6 +4,32 @@ import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/r
 import appCss from "../styles.css?url";
 import { bootstrapStore, useStore } from "@/data/store";
 
+const csp = import.meta.env.DEV
+  ? [
+      "default-src 'self'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "img-src 'self' data: blob:",
+      "font-src 'self' data:",
+      "style-src 'self' 'unsafe-inline'",
+      "script-src 'self'",
+      "connect-src 'self' ws://127.0.0.1:5173 http://127.0.0.1:5173",
+      "object-src 'none'",
+      "frame-ancestors 'none'",
+    ].join("; ")
+  : [
+      "default-src 'self'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "img-src 'self' data: blob:",
+      "font-src 'self' data:",
+      "style-src 'self' 'unsafe-inline'",
+      "script-src 'self'",
+      "connect-src 'self'",
+      "object-src 'none'",
+      "frame-ancestors 'none'",
+    ].join("; ");
+
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -31,6 +57,7 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { httpEquiv: "Content-Security-Policy", content: csp },
       { title: "CCTV Manager" },
       {
         name: "description",
