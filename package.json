@@ -8,8 +8,8 @@
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
-    "dev": "vite dev",
-    "dev:desktop": "concurrently -k -n WEB,DESKTOP \"vite dev --host 127.0.0.1 --port 5173\" \"wait-on http://127.0.0.1:5173 && electron .\"",
+    "dev": "vite dev --configLoader native --strictPort",
+    "dev:desktop": "concurrently -k -n WEB,DESKTOP \"vite dev --host 127.0.0.1 --port 5173 --strictPort --configLoader native\" \"wait-on http://127.0.0.1:5173 && electron --disable-gpu --disable-gpu-compositing --disable-gpu-sandbox --in-process-gpu --use-angle=swiftshader .\"",
     "build": "vite build --configLoader native",
     "build:dev": "vite build --mode development --configLoader native",
     "preview": "vite preview",

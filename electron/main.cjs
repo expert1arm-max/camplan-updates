@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
+﻿const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const http = require("node:http");
 const path = require("node:path");
@@ -7,8 +7,22 @@ const fs = require("fs/promises");
 
 const isDev = !app.isPackaged;
 const devUrl = process.env.VITE_DEV_SERVER_URL || "http://127.0.0.1:5173";
+const localUserDataDir = path.resolve(process.cwd(), ".electron-data");
 let server;
 let mainWindow;
+
+app.commandLine.appendSwitch("disable-gpu");
+app.commandLine.appendSwitch("disable-gpu-compositing");
+app.commandLine.appendSwitch("disable-gpu-sandbox");
+app.commandLine.appendSwitch("in-process-gpu");
+app.commandLine.appendSwitch("use-angle", "swiftshader");
+app.commandLine.appendSwitch("user-data-dir", localUserDataDir);
+app.commandLine.appendSwitch("disk-cache-dir", path.join(localUserDataDir, "Cache"));
+app.disableHardwareAcceleration();
+app.setPath("appData", path.join(localUserDataDir, "AppData"));
+app.setPath("userData", localUserDataDir);
+app.setPath("sessionData", path.join(localUserDataDir, "Session Data"));
+app.setPath("cache", path.join(localUserDataDir, "Cache"));
 
 function getMimeType(filePath) {
   if (filePath.endsWith(".css")) return "text/css; charset=utf-8";
@@ -223,7 +237,7 @@ async function fetchLatestGithubRelease() {
 app.setAppUserModelId("com.camplan.cctvmanager");
 
 app.whenReady().then(() => {
-  app.setApplicationMenu(null);
+  Menu.setApplicationMenu(null);
   autoUpdater.autoDownload = false;
 
   ipcMain.handle("app:get-version", () => app.getVersion());
@@ -384,3 +398,5 @@ app.on("window-all-closed", () => {
     app.quit();
   }
 });
+
+

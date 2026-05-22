@@ -4,11 +4,13 @@
 ```bash
 npm run dev
 ```
+`dev` запускает Vite в strict port mode, чтобы он не уезжал на другой порт при уже занятом `5173`.
 
 ## Desktop dev
 ```bash
 npm run dev:desktop
 ```
+`dev:desktop` поднимает Vite на `5173` в strict mode и запускает Electron с software-rendering fallback для Windows dev-сессии.
 
 ## Frontend build
 ```bash
