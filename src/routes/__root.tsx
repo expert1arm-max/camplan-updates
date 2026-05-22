@@ -12,10 +12,9 @@ const csp = import.meta.env.DEV
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
       "style-src 'self' 'unsafe-inline'",
-      "script-src 'self'",
+      "script-src 'self' 'unsafe-inline'",
       "connect-src 'self' ws://127.0.0.1:5173 http://127.0.0.1:5173",
       "object-src 'none'",
-      "frame-ancestors 'none'",
     ].join("; ")
   : [
       "default-src 'self'",
@@ -24,10 +23,9 @@ const csp = import.meta.env.DEV
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
       "style-src 'self' 'unsafe-inline'",
-      "script-src 'self'",
+      "script-src 'self' 'unsafe-inline'",
       "connect-src 'self'",
       "object-src 'none'",
-      "frame-ancestors 'none'",
     ].join("; ");
 
 function NotFoundComponent() {

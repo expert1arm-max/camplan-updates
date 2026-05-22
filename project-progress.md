@@ -52,6 +52,9 @@
 - Новые `Room` теперь создаются чёрными независимо от выбранного preset color в правой панели.
 - Дверь теперь фиксируется по последней валидной привязке к стене/грани комнаты, с fallback на линию жеста при отпускании мыши.
 - В верхней панели `Файл`, `Редактирование` и `Все устройства` перенесены в начало строки рядом с названием приложения.
+- В верхней панели добавлен раздел `Помощь` с пунктами `О программе` и `Обновить программу`.
+- `О программе` показывает номер версии приложения, полученный из Electron runtime.
+- `Обновить программу` вызывает ручную проверку GitHub Releases через `electron-updater`.
 - В верхней панели акцент режима редактирования перенесён с отдельного бейджа на кнопку `Завершить редактирование`, чтобы статус не дублировался в конце строки.
 - При завершении редактирования больше не показывается отдельная надпись `Изменения сохранены` в верхней строке, остаётся только текст на кнопке.
 - В верхней панели удалена строка `Автосохранение • время`, чтобы тулбар был чище и стабильнее по ширине.
@@ -196,5 +199,5 @@
 - Room tool can now start a new room even when the cursor is over an existing room, so existing geometry no longer blocks room creation.
 - Switching to any non-select tool now clears current map selection immediately, so previously marked objects no longer stay highlighted while drawing.
 - Added GitHub Actions release workflow that publishes Windows installer assets on tag push `v*` into the GitHub release repo configured for `electron-updater`.
-- Added a renderer Content Security Policy in the root HTML shell to tighten Electron dev/prod renderer security without breaking the app build.
+- Added a renderer Content Security Policy in the root HTML shell and relaxed script policy enough for TanStack Start inline bootstrap scripts to run in Electron dev/prod without blocking the app.
 

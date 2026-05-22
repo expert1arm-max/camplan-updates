@@ -121,6 +121,40 @@ async function createWindow() {
 app.setAppUserModelId("com.camplan.cctvmanager");
 
 app.whenReady().then(() => {
+  ipcMain.handle("app:get-version", () => app.getVersion());
+
+  ipcMain.handle("app:check-for-updates", async () => {
+    if (!app.isPackaged) {
+      return {
+        state: "disabled",
+        message: "Проверка обновлений доступна в собранной версии приложения.",
+      };
+    }
+
+    try {
+      const result = await autoUpdater.checkForUpdates();
+      const updateInfo = result?.updateInfo;
+
+      if (!updateInfo) {
+        return {
+          state: "not-available",
+          message: `Установлена последняя версия ${app.getVersion()}.`,
+        };
+      }
+
+      return {
+        state: "available",
+        message: `Доступна версия ${updateInfo.version}. Проверь GitHub Releases для загрузки обновления.`,
+        version: updateInfo.version,
+      };
+    } catch (error) {
+      return {
+        state: "error",
+        message: error instanceof Error ? error.message : "Не удалось проверить обновления.",
+      };
+    }
+  });
+
   ipcMain.handle("dialog:open-json", async () => {
     const result = await dialog.showOpenDialog({
       properties: ["openFile"],

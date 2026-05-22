@@ -2,6 +2,7 @@
 import {
   Camera,
   Check,
+  CircleHelp,
   Download,
   DoorOpen,
   Eye,
@@ -21,7 +22,7 @@ import {
   Table2,
   Zap,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStore, deviceTypeLabels } from "@/data/store";
 import type { CableType, DeviceType, EditorMode } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,12 @@ import { cn } from "@/lib/utils";
 declare global {
   interface Window {
     cctvDesktop?: {
+      getAppVersion: () => Promise<string>;
+      checkForUpdates: () => Promise<{
+        state: "disabled" | "not-available" | "available" | "error";
+        message: string;
+        version?: string;
+      }>;
       openJsonFile: () => Promise<string | null>;
       openExternal: (url: string) => Promise<boolean>;
       saveTextFile: (payload: {
@@ -124,7 +131,27 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
   const fileRef = useRef<HTMLInputElement>(null);
   const [savedFlash, setSavedFlash] = useState(false);
   const [newProjectPromptOpen, setNewProjectPromptOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [updateOpen, setUpdateOpen] = useState(false);
+  const [appVersion, setAppVersion] = useState("0.1.1");
+  const [updateMessage, setUpdateMessage] = useState("");
   const showIpLabels = settings.uiState?.showIpLabels ?? false;
+
+  useEffect(() => {
+    const bridge = window.cctvDesktop;
+    if (!bridge) return;
+
+    let alive = true;
+    void bridge.getAppVersion().then((version) => {
+      if (alive && version) {
+        setAppVersion(version);
+      }
+    });
+
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const saveFile = async (
     defaultPath: string,
@@ -261,6 +288,24 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
     newProject();
   };
 
+  const handleAboutOpen = () => {
+    setAboutOpen(true);
+  };
+
+  const handleUpdateCheck = async () => {
+    setUpdateMessage("Проверяем обновления на GitHub...");
+    setUpdateOpen(true);
+
+    const bridge = window.cctvDesktop;
+    if (!bridge) {
+      setUpdateMessage("Проверка обновлений доступна только в Electron.");
+      return;
+    }
+
+    const result = await bridge.checkForUpdates();
+    setUpdateMessage(result.message);
+  };
+
   return (
     <div
       className={cn(
@@ -319,6 +364,34 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog open={aboutOpen} onOpenChange={setAboutOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>О программе</AlertDialogTitle>
+            <AlertDialogDescription>
+              CCTV Manager
+              <br />
+              Версия: {appVersion}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setAboutOpen(false)}>Ок</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={updateOpen} onOpenChange={setUpdateOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Обновить программу</AlertDialogTitle>
+            <AlertDialogDescription>{updateMessage}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setUpdateOpen(false)}>Ок</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Button
         variant="outline"
         size="sm"
@@ -349,6 +422,20 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
           <Table2 className="h-4 w-4 mr-1" /> Все устройства
         </Button>
       </Link>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm">
+            <CircleHelp className="h-4 w-4 mr-1" />
+            Помощь
+            <ChevronDown className="h-4 w-4 ml-1" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuItem onClick={handleAboutOpen}>О программе</DropdownMenuItem>
+          <DropdownMenuItem onClick={handleUpdateCheck}>Обновить программу</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <Button
         variant={showIpLabels ? "default" : "outline"}
@@ -421,9 +508,6 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
           ))}
         </div>
       )}
-
-      <div className="ml-auto flex items-center gap-2 flex-wrap justify-end">
-      </div>
 
       <input
         ref={fileRef}
