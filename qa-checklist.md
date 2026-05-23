@@ -6,7 +6,7 @@
 - [x] `npm run dist:win`
 
 ## Electron startup
-- [ ] Запустить свежий Windows installer `release\CCTV Manager Setup 0.2.1.exe`.
+- [ ] Запустить свежий Windows installer `release\CCTV Manager Setup 0.2.2.exe`.
 - [ ] Проверить, что UI открывается со стилями и без black screen.
 - [ ] Проверить, что приложение стартует в режиме `Просмотр`.
 - [ ] Переключиться в `Редактирование` и обратно.
