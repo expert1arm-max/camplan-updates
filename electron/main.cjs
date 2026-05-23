@@ -4,6 +4,7 @@ const path = require("node:path");
 const { Readable, Transform } = require("node:stream");
 const { pipeline } = require("node:stream/promises");
 const { createWriteStream } = require("node:fs");
+const { pathToFileURL } = require("node:url");
 const fs = require("fs/promises");
 
 const isDev = !app.isPackaged;
