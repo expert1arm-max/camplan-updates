@@ -1135,9 +1135,8 @@ export function PlanCanvas({
       if (text) {
         try {
           importJSON(text);
-          alert("Проект открыт");
         } catch {
-          alert("Ошибка открытия проекта");
+          console.error("Ошибка открытия проекта");
         }
       }
       return;
@@ -1153,9 +1152,8 @@ export function PlanCanvas({
 
     try {
       importJSON(await file.text());
-      alert("Проект открыт");
     } catch {
-      alert("Ошибка открытия проекта");
+      console.error("Ошибка открытия проекта");
     }
   };
   const [drag, setDrag] = useState<

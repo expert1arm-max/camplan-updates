@@ -363,9 +363,8 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
       if (text) {
         try {
           importJSON(text);
-          alert("Импорт выполнен");
         } catch {
-          alert("Ошибка импорта");
+          console.error("Ошибка импорта");
         }
       }
       return;
@@ -713,9 +712,8 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
           const text = await file.text();
           try {
             importJSON(text);
-            alert("Импорт выполнен");
           } catch {
-            alert("Ошибка импорта");
+            console.error("Ошибка импорта");
           }
           e.target.value = "";
         }}

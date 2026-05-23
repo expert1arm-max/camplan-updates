@@ -124,3 +124,6 @@
 
 ## Update flow
 - [ ] Запустить `Помощь -> Обновить программу` в packaged Windows build и проверить, что скачивание идёт из GitHub release asset, появляется прогресс, и installer открывается без ошибки `The "path" argument must be of type string. Received undefined`.
+
+## Open project
+- [ ] Открыть JSON-проект через canvas и toolbar и проверить, что после успешного импорта не появляется modal alert `Проект открыт` или `Импорт выполнен`.
