@@ -176,6 +176,11 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
     isEditMode,
     currentCableType,
     settings,
+    objects,
+    floors,
+    mapElements,
+    devices,
+    deviceConnections,
     clearSelection,
     setCableType,
     setEditMode,
@@ -195,6 +200,12 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
   const [updatePhase, setUpdatePhase] = useState<"idle" | "checking" | "downloading" | "done" | "error">("idle");
   const [updateProgress, setUpdateProgress] = useState<UpdateProgress | null>(null);
   const showIpLabels = settings.uiState?.showIpLabels ?? false;
+  const hasProjectContent =
+    objects.length > 0 ||
+    floors.length > 0 ||
+    mapElements.length > 0 ||
+    devices.length > 0 ||
+    deviceConnections.length > 0;
   const updateAvailable = Boolean(appVersion && githubVersion && githubVersion !== appVersion);
 
   useEffect(() => {
@@ -288,18 +299,29 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
   };
 
   const handleExportJson = async () => {
+    if (!hasProjectContent) {
+      return;
+    }
+
     await saveFile(`cctv-export-${Date.now()}.json`, exportJSON(), [
       { name: "JSON", extensions: ["json"] },
     ]);
   };
 
   const handleExportCsv = async () => {
-    const { devices, floors, objects } = useStore.getState();
+    if (!hasProjectContent) {
+      return;
+    }
+
     const csv = buildDeviceCsv(devices, floors, objects);
     await saveFile(`cctv-devices-${Date.now()}.csv`, csv, [{ name: "CSV", extensions: ["csv"] }]);
   };
 
   const handleExportJpg = async () => {
+    if (!hasProjectContent) {
+      return;
+    }
+
     const svg = document.getElementById("plan-canvas-svg") as SVGSVGElement | null;
     if (!svg) return;
 
@@ -490,17 +512,17 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
             <FilePlus2 className="h-4 w-4" /> Новый проект
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleExportJson}>
+          <DropdownMenuItem disabled={!hasProjectContent} onClick={handleExportJson}>
             <Download className="h-4 w-4" /> Сохранить проект
           </DropdownMenuItem>
           <DropdownMenuItem onClick={handleImport}>
             <Upload className="h-4 w-4" /> Открыть проект
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleExportJpg}>
+          <DropdownMenuItem disabled={!hasProjectContent} onClick={handleExportJpg}>
             <Download className="h-4 w-4" /> Экспорт JPG
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleExportCsv}>
+          <DropdownMenuItem disabled={!hasProjectContent} onClick={handleExportCsv}>
             <Download className="h-4 w-4" /> Экспорт CSV
           </DropdownMenuItem>
         </DropdownMenuContent>

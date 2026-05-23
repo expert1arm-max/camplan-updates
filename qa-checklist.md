@@ -109,7 +109,8 @@
 - [ ] Открыть проект через `Файл -> Открыть проект`.
 - [ ] Экспортировать JPG через `Файл -> Экспорт JPG`.
 - [ ] Экспортировать CSV через `Файл -> Экспорт CSV`.
-- [ ] Импортировать legacy JSON с `cameras`, если есть тестовый файл.
+- [ ] Импортировать legacy JSON с `cameras`, если есть тестовый файл.
+- [ ] Verify save/export stay disabled when the project is empty.
 
 ## Hotkeys
 - [ ] Проверить undo через `Ctrl+Z`.

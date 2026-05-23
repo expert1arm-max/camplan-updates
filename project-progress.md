@@ -217,4 +217,5 @@
 - Hardened the direct update download path so missing release asset metadata falls back to a synthesized installer filename instead of crashing on `path.join(...)`.
 - The direct update installer now launches as a detached process so closing the app during installation does not terminate the installer itself.
 - Removed modal `alert()` dialogs from project open/import flows so opening a file no longer shows a blocking system window; failures now go to the console.
+- File menu save/export actions are disabled until the project contains content, so empty projects stay passive for Save Project, JPG export, and CSV export.
 
