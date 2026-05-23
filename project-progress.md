@@ -63,7 +63,7 @@
 - При старте приложение тихо проверяет latest release на GitHub и подсвечивает кнопку `О программе` зелёным, если доступна более новая версия.
 - Dev-запуск `dev:desktop` переведён на strict port `5173`, а Electron запускается с локальным `userData/sessionData` и `swiftshader` fallback, чтобы не уезжать на `5174` и не упираться в AppData/GPU cache issues.
 - Верхняя кнопка `Помощь` переименована в `О программе` и теперь сразу открывает окно обновления, без промежуточного выпадающего меню.
-- Версия приложения поднята до `0.2.4`; локальный Windows installer `release\CCTV Manager Setup 0.2.4.exe` собран, а тег `v0.2.4` отправлен в GitHub для публикации релиза через Actions.
+- Версия приложения поднята до `0.2.5`; локальный Windows installer `release\CCTV Manager Setup 0.2.5.exe` собран, а тег `v0.2.5` отправлен в GitHub для публикации релиза через Actions.
 - В верхней панели акцент режима редактирования перенесён с отдельного бейджа на кнопку `Завершить редактирование`, чтобы статус не дублировался в конце строки.
 - При завершении редактирования больше не показывается отдельная надпись `Изменения сохранены` в верхней строке, остаётся только текст на кнопке.
 - В верхней панели удалена строка `Автосохранение • время`, чтобы тулбар был чище и стабильнее по ширине.
@@ -215,5 +215,6 @@
 - Fixed runtime update lookup so packaged builds can still resolve the GitHub releases repo even when the shipped `package.json` does not include `build.publish`.
 - Replaced the packaged update download path with a direct GitHub release asset download/open flow so the update button no longer depends on `electron-updater` cache path internals and avoids the `path` undefined crash.
 - Hardened the direct update download path so missing release asset metadata falls back to a synthesized installer filename instead of crashing on `path.join(...)`.
+- The direct update installer now launches as a detached process so closing the app during installation does not terminate the installer itself.
 - Removed modal `alert()` dialogs from project open/import flows so opening a file no longer shows a blocking system window; failures now go to the console.
 

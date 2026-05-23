@@ -1,5 +1,6 @@
 ﻿const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require("electron");
 const http = require("node:http");
+const { spawn } = require("node:child_process");
 const path = require("node:path");
 const { Readable, Transform } = require("node:stream");
 const { pipeline } = require("node:stream/promises");
@@ -315,10 +316,12 @@ async function downloadReleaseAsset(asset, version) {
 
   await pipeline(Readable.fromWeb(response.body), progressStream, createWriteStream(targetPath));
 
-  const openResult = await shell.openPath(targetPath);
-  if (openResult) {
-    throw new Error(openResult);
-  }
+  const installer = spawn(targetPath, [], {
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  installer.unref();
 
   return {
     path: targetPath,
