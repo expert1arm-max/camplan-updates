@@ -1,11 +1,9 @@
 ﻿const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require("electron");
 const http = require("node:http");
-const { spawn } = require("node:child_process");
 const path = require("node:path");
 const { Readable, Transform } = require("node:stream");
 const { pipeline } = require("node:stream/promises");
 const { createWriteStream } = require("node:fs");
-const { pathToFileURL } = require("node:url");
 const fs = require("fs/promises");
 
 const isDev = !app.isPackaged;
@@ -316,12 +314,10 @@ async function downloadReleaseAsset(asset, version) {
 
   await pipeline(Readable.fromWeb(response.body), progressStream, createWriteStream(targetPath));
 
-  const installer = spawn(process.env.ComSpec || "cmd.exe", ["/c", "start", "", targetPath], {
-    detached: true,
-    stdio: "ignore",
-    windowsHide: true,
-  });
-  installer.unref();
+  const openError = await shell.openPath(targetPath);
+  if (openError) {
+    throw new Error(`Не удалось запустить installer: ${openError}`);
+  }
 
   return {
     path: targetPath,
