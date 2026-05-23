@@ -214,5 +214,6 @@
 - Added a renderer Content Security Policy in the root HTML shell and relaxed script policy enough for TanStack Start inline bootstrap scripts to run in Electron dev/prod without blocking the app.
 - Fixed runtime update lookup so packaged builds can still resolve the GitHub releases repo even when the shipped `package.json` does not include `build.publish`.
 - Replaced the packaged update download path with a direct GitHub release asset download/open flow so the update button no longer depends on `electron-updater` cache path internals and avoids the `path` undefined crash.
+- Hardened the direct update download path so missing release asset metadata falls back to a synthesized installer filename instead of crashing on `path.join(...)`.
 - Removed modal `alert()` dialogs from project open/import flows so opening a file no longer shows a blocking system window; failures now go to the console.
 

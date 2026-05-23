@@ -268,8 +268,19 @@ async function downloadReleaseAsset(asset, version) {
   const downloadsDir = path.join(app.getPath("userData"), "updates");
   await fs.mkdir(downloadsDir, { recursive: true });
 
-  const targetPath = path.join(downloadsDir, asset.name);
-  const response = await fetch(asset.browserDownloadUrl, {
+  const assetName = String(asset?.name || `CCTV-Manager-Setup-${version}.exe`).trim();
+  const downloadUrl = String(asset?.browserDownloadUrl || "").trim();
+
+  if (!assetName) {
+    throw new Error(`В релизе ${version} не удалось определить имя файла обновления.`);
+  }
+
+  if (!downloadUrl) {
+    throw new Error(`В релизе ${version} не найдена ссылка на файл обновления.`);
+  }
+
+  const targetPath = path.join(downloadsDir, assetName);
+  const response = await fetch(downloadUrl, {
     headers: {
       accept: "application/octet-stream",
       "user-agent": "CCTV Manager",

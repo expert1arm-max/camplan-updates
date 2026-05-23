@@ -123,7 +123,7 @@
 - [ ] Проверить, что web-строка камеры кликается и открывает `http://<ip>:80` во внешнем браузере по умолчанию.
 
 ## Update flow
-- [ ] Запустить `Помощь -> Обновить программу` в packaged Windows build и проверить, что скачивание идёт из GitHub release asset, появляется прогресс, и installer открывается без ошибки `The "path" argument must be of type string. Received undefined`.
+- [ ] Запустить `Помощь -> Обновить программу` в packaged Windows build и проверить, что скачивание идёт из GitHub release asset, появляется прогресс, installer открывается без ошибки `The "path" argument must be of type string. Received undefined`, и flow переживает fallback-имя файла при неполных asset metadata.
 
 ## Open project
 - [ ] Открыть JSON-проект через canvas и toolbar и проверить, что после успешного импорта не появляется modal alert `Проект открыт` или `Импорт выполнен`.
