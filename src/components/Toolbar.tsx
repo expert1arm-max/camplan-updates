@@ -590,7 +590,7 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
         variant="outline"
         size="sm"
         className={cn(
-          "min-w-[176px] justify-center whitespace-nowrap",
+          "w-[220px] flex-none justify-center whitespace-nowrap",
           isEditMode &&
             "border-amber-500/30 bg-amber-500/15 text-amber-700 hover:bg-amber-500/20 dark:text-amber-300",
         )}
