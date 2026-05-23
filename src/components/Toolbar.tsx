@@ -189,24 +189,35 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
   const [savedFlash, setSavedFlash] = useState(false);
   const [newProjectPromptOpen, setNewProjectPromptOpen] = useState(false);
   const [updateOpen, setUpdateOpen] = useState(false);
-  const [appVersion, setAppVersion] = useState("0.1.1");
+  const [appVersion, setAppVersion] = useState("");
   const [githubVersion, setGithubVersion] = useState<string | null>(null);
   const [updateMessage, setUpdateMessage] = useState("");
   const [updatePhase, setUpdatePhase] = useState<"idle" | "checking" | "downloading" | "done" | "error">("idle");
   const [updateProgress, setUpdateProgress] = useState<UpdateProgress | null>(null);
   const showIpLabels = settings.uiState?.showIpLabels ?? false;
-  const updateAvailable = Boolean(githubVersion && githubVersion !== appVersion);
+  const updateAvailable = Boolean(appVersion && githubVersion && githubVersion !== appVersion);
 
   useEffect(() => {
     const bridge = window.cctvDesktop;
     if (!bridge) return;
 
     let alive = true;
-    void bridge.getAppVersion().then((version) => {
-      if (alive && version) {
+    void (async () => {
+      const [version, release] = await Promise.all([
+        bridge.getAppVersion(),
+        bridge.getLatestReleaseVersion(),
+      ]);
+
+      if (!alive) return;
+
+      if (version) {
         setAppVersion(version);
       }
-    });
+
+      if (release.state === "available" && release.version) {
+        setGithubVersion(release.version);
+      }
+    })();
 
     return () => {
       alive = false;
@@ -395,7 +406,6 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
     setUpdateOpen(true);
     setUpdatePhase("checking");
     setUpdateProgress(null);
-    setGithubVersion(null);
     setUpdateMessage("Проверяем версию на GitHub...");
 
     const bridge = window.cctvDesktop;
@@ -607,7 +617,15 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
         </Button>
       </Link>
 
-      <Button variant="outline" size="sm" onClick={handleUpdateOpen}>
+      <Button
+        variant="outline"
+        size="sm"
+        className={cn(
+          updateAvailable &&
+            "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300",
+        )}
+        onClick={handleUpdateOpen}
+      >
         <CircleHelp className="h-4 w-4 mr-1" />
         О программе
       </Button>
