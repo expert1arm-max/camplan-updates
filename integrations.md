@@ -31,3 +31,4 @@
 - The GitHub release lookup uses a timeout so a slow or unreachable GitHub response turns into an error instead of an infinite checking state.
 - The update dialog compares the local app version with the GitHub version and only enables the update action when they differ.
 - The update dialog can still listen to IPC progress events from Electron main while an actual download is running.
+- Packaged builds also use a runtime fallback repo in `electron/main.cjs`, so the app can still find the release repository even if `build.publish` is not present in the shipped `package.json`.

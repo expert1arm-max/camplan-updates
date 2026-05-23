@@ -8,6 +8,10 @@ const fs = require("fs/promises");
 const isDev = !app.isPackaged;
 const devUrl = process.env.VITE_DEV_SERVER_URL || "http://127.0.0.1:5173";
 const localUserDataDir = path.resolve(process.cwd(), ".electron-data");
+const githubReleaseRepoFallback = {
+  owner: "expert1arm-max",
+  repo: "camplan-updates",
+};
 let server;
 let mainWindow;
 
@@ -156,13 +160,20 @@ function getPackageConfig() {
 }
 
 function getGithubReleaseRepo() {
+  const envOwner = String(process.env.CAMPLAN_UPDATE_REPO_OWNER || "").trim();
+  const envRepo = String(process.env.CAMPLAN_UPDATE_REPO_NAME || "").trim();
+
+  if (envOwner && envRepo) {
+    return { owner: envOwner, repo: envRepo };
+  }
+
   const publish = getPackageConfig()?.build?.publish;
   const firstPublish = Array.isArray(publish) ? publish[0] : null;
   const owner = firstPublish?.owner;
   const repo = firstPublish?.repo;
 
   if (!owner || !repo) {
-    return null;
+    return githubReleaseRepoFallback;
   }
 
   return { owner, repo };

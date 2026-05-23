@@ -9,3 +9,4 @@
 - Для импорта старых данных есть нормализация legacy-полей.
 - Сохранён Lovable-ориентированный desktop layout.
 - Windows releases publish through GitHub Actions + GitHub Releases, and `electron-updater` points to the release repo from `package.json`.
+- Runtime release lookup in `electron/main.cjs` must not depend only on `build.publish` being present in the packaged `package.json`; it now accepts env overrides and falls back to the fixed GitHub releases repo so the update check still works in packaged builds.
