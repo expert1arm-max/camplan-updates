@@ -18,6 +18,7 @@ const DB_NAME = "camplan-local";
 const DB_VERSION = 3;
 const STORE_NAME = "app-data";
 const STORAGE_KEY = "current";
+const BACKUP_STORAGE_KEY = "camplan:last-app-data";
 
 const DEFAULT_SETTINGS: AppData["settings"] = {
   theme: "system",
@@ -61,6 +62,11 @@ function now() {
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value));
+}
+
+function getBackupStorage() {
+  if (typeof localStorage === "undefined") return null;
+  return localStorage;
 }
 
 function isRecord(value: unknown): value is UnknownRecord {
@@ -158,6 +164,30 @@ async function writeRaw(value: unknown): Promise<void> {
       reject(tx.error);
     };
   });
+}
+
+function readBackupRaw(): unknown | null {
+  const storage = getBackupStorage();
+  if (!storage) return null;
+
+  try {
+    const raw = storage.getItem(BACKUP_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function writeBackupRaw(value: unknown) {
+  const storage = getBackupStorage();
+  if (!storage) return;
+
+  try {
+    storage.setItem(BACKUP_STORAGE_KEY, JSON.stringify(value));
+  } catch {
+    // localStorage is a best-effort backup for the latest project snapshot.
+  }
 }
 
 function normalizeSettings(input: unknown): AppSettings {
@@ -402,15 +432,25 @@ export function normalizeAppData(input: unknown): AppData {
 
 export async function loadAppData(): Promise<AppData | null> {
   try {
+    const backupRaw = readBackupRaw();
+    if (backupRaw) return normalizeAppData(backupRaw);
+
     const raw = await readRaw();
     if (!raw) return null;
     return normalizeAppData(raw);
   } catch {
-    return null;
+    try {
+      const raw = await readRaw();
+      if (!raw) return null;
+      return normalizeAppData(raw);
+    } catch {
+      return null;
+    }
   }
 }
 
 export async function saveAppData(data: AppData): Promise<void> {
   const snapshot = clone(data);
+  writeBackupRaw(snapshot);
   await writeRaw(snapshot);
 }
