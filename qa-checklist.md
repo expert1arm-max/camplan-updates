@@ -6,7 +6,7 @@
 - [x] `npm run dist:win`
 
 ## Electron startup
-- [ ] Запустить свежий Windows installer `release\CCTV Manager Setup 0.2.10.exe`.
+- [ ] Запустить свежий Windows installer `release\CCTV Manager Setup 0.2.11.exe`.
 - [ ] Проверить, что UI открывается со стилями и без black screen.
 - [ ] Проверить, что приложение стартует в режиме `Просмотр`.
 - [ ] Переключиться в `Редактирование` и обратно.
@@ -73,7 +73,7 @@
 - [ ] Проверить, что при перетаскивании одного конца стены стена вращается вокруг противоположного конца, а не только растягивается.
 - [ ] Проверить, что у уже созданной стены перетаскивание конца даёт такой же живой resize/rotate, как у новой стены при рисовании.
 - [ ] Verify wall endpoint rotation keeps the drag active when the cursor leaves and re-enters the canvas, and that mouseup outside the SVG still ends the interaction cleanly.
-- [ ] Verify the update installer is launched through the system shell path and remains alive when the app closes in response to the NSIS prompt.
+- [ ] Verify the update installer is launched through a temporary scheduled task and remains alive when the app closes in response to the NSIS prompt.
 - [ ] Проверить, что после нажатия `+` у строки объекта создаётся дочерняя зона/этаж, а фокус переходит на план/canvas.
 - [ ] Проверить, что ручное переименование объекта и зоны через карандаш или double click остаётся редактируемым.
 - [ ] Проверить, что в поле переименования объекта/зоны работают обычный ввод, Backspace, Delete и вставка текста без дополнительного клика по экрану.

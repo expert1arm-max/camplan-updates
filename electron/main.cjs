@@ -265,32 +265,80 @@ function pickInstallerAsset(release) {
   return exeAsset || null;
 }
 
-function escapePowerShellSingleQuoted(value) {
-  return String(value).replace(/'/g, "''");
+function getSystemExecutablePath(executableName) {
+  const systemRoot = process.env.SystemRoot || "C:\\Windows";
+  return path.join(systemRoot, "System32", executableName);
 }
 
-function launchInstallerDetached(targetPath) {
-  const installerLiteral = `'${escapePowerShellSingleQuoted(targetPath)}'`;
-  const script = `Start-Process -LiteralPath ${installerLiteral}`;
-  const encodedCommand = Buffer.from(script, "utf16le").toString("base64");
-
+function spawnDetachedProcess(executable, args) {
   return new Promise((resolve, reject) => {
-    const child = spawn(
-      "powershell.exe",
-      ["-NoProfile", "-WindowStyle", "Hidden", "-EncodedCommand", encodedCommand],
-      {
-        detached: true,
-        stdio: "ignore",
-        windowsHide: true,
-      },
-    );
+    const child = spawn(executable, args, {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    });
 
     child.once("spawn", () => {
       child.unref();
-      resolve();
     });
     child.once("error", reject);
+    child.once("close", (code, signal) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      reject(new Error(`Команда ${path.basename(executable)} завершилась с кодом ${code ?? signal ?? "unknown"}.`));
+    });
   });
+}
+
+function formatTaskTime(date) {
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+async function launchInstallerViaScheduledTask(targetPath) {
+  const taskName = `CamplanUpdate-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const startTime = new Date(Date.now() + 2 * 60 * 1000);
+  const taskCommand = `"${String(targetPath).replace(/"/g, '""')}"`;
+  const schtasksPath = getSystemExecutablePath("schtasks.exe");
+
+  await spawnDetachedProcess(schtasksPath, [
+    "/Create",
+    "/F",
+    "/SC",
+    "ONCE",
+    "/ST",
+    formatTaskTime(startTime),
+    "/TN",
+    taskName,
+    "/TR",
+    taskCommand,
+  ]);
+
+  const runPromise = spawnDetachedProcess(schtasksPath, ["/Run", "/TN", taskName]);
+
+  setTimeout(() => {
+    void spawnDetachedProcess(schtasksPath, ["/Delete", "/F", "/TN", taskName]).catch(() => {});
+  }, 15000);
+
+  return runPromise;
+}
+
+async function launchInstallerDetached(targetPath) {
+  try {
+    await launchInstallerViaScheduledTask(targetPath);
+    return;
+  } catch {
+    // Fall back to direct shell launch when Task Scheduler is unavailable.
+  }
+
+  const openError = await shell.openPath(targetPath);
+  if (openError) {
+    throw new Error(`Не удалось запустить installer: ${openError}`);
+  }
 }
 
 async function downloadReleaseAsset(asset, version) {
@@ -344,14 +392,7 @@ async function downloadReleaseAsset(asset, version) {
 
   await pipeline(Readable.fromWeb(response.body), progressStream, createWriteStream(targetPath));
 
-  try {
-    await launchInstallerDetached(targetPath);
-  } catch {
-    const openError = await shell.openPath(targetPath);
-    if (openError) {
-      throw new Error(`Не удалось запустить installer: ${openError}`);
-    }
-  }
+  await launchInstallerDetached(targetPath);
 
   return {
     path: targetPath,

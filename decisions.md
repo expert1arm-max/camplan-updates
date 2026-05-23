@@ -12,4 +12,4 @@
 - Runtime release lookup in `electron/main.cjs` must not depend only on `build.publish` being present in the packaged `package.json`; it now accepts env overrides and falls back to the fixed GitHub releases repo so the update check still works in packaged builds.
 - The update button now bypasses `electron-updater` for the download step and instead downloads the latest GitHub release installer asset directly, which avoids the packaged cache-path crash on Windows.
 - The direct download flow now sanitizes the installer asset name and falls back to a synthesized filename so malformed release asset metadata cannot crash the update path.
-- The update installer is launched through a detached PowerShell `Start-Process` helper so it is started outside the Electron child-process tree when NSIS asks to close the running application.
+- The update installer is launched through a temporary scheduled task first so it starts outside the Electron child-process tree when NSIS asks to close the running application.
