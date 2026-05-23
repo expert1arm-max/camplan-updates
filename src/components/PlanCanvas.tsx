@@ -2265,7 +2265,7 @@ export function PlanCanvas({
     }
   };
 
-  const onMouseUp = () => {
+  const finishDrag = () => {
     if (drag?.kind === "move-el") {
       const element = floorEls.find((item) => item.id === drag.id);
       if (element?.type === "wall") {
@@ -2341,6 +2341,10 @@ export function PlanCanvas({
     }
     setDoorPreview(null);
     setDrag(null);
+  };
+
+  const onMouseUp = () => {
+    finishDrag();
   };
 
   useEffect(() => {
@@ -2430,6 +2434,18 @@ export function PlanCanvas({
     if (!drag) return;
     setHoverConnection(null);
     setHoverSegment(null);
+  }, [drag]);
+
+  useEffect(() => {
+    if (!drag) return;
+
+    const onWindowMouseUp = (event: MouseEvent) => {
+      if (svgRef.current?.contains(event.target as Node)) return;
+      finishDrag();
+    };
+
+    window.addEventListener("mouseup", onWindowMouseUp);
+    return () => window.removeEventListener("mouseup", onWindowMouseUp);
   }, [drag]);
 
   useEffect(() => {
@@ -2983,7 +2999,6 @@ export function PlanCanvas({
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
-        onMouseLeave={onMouseUp}
         onDoubleClick={(e) => {
           if (!draftCable || mode !== "connector" || !isEditMode) return;
           e.preventDefault();

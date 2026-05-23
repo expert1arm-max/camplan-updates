@@ -219,4 +219,5 @@
 - Removed modal `alert()` dialogs from project open/import flows so opening a file no longer shows a blocking system window; failures now go to the console.
 - File menu save/export actions are disabled until the project contains content, so empty projects stay passive for Save Project, JPG export, and CSV export.
 - Released `0.2.7` with the latest installer-launch fix for keeping NSIS alive after closing the app.
+- Wall endpoint rotation drag no longer cancels on canvas exit; the drag stays active when the cursor leaves and re-enters the field, and it ends on mouseup even if release happens outside the SVG.
 
