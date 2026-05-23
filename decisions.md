@@ -13,3 +13,4 @@
 - The update button now bypasses `electron-updater` for the download step and instead downloads the latest GitHub release installer asset directly, which avoids the packaged cache-path crash on Windows.
 - The direct download flow now sanitizes the installer asset name and falls back to a synthesized filename so malformed release asset metadata cannot crash the update path.
 - The downloaded installer must be spawned as a detached process on Windows so the update flow survives the user closing the app when the NSIS prompt asks to exit the running program.
+- The downloaded installer is now launched through `cmd /c start` from a detached helper process so Windows closes the app without terminating the installer process itself.

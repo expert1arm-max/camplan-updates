@@ -316,7 +316,7 @@ async function downloadReleaseAsset(asset, version) {
 
   await pipeline(Readable.fromWeb(response.body), progressStream, createWriteStream(targetPath));
 
-  const installer = spawn(targetPath, [], {
+  const installer = spawn(process.env.ComSpec || "cmd.exe", ["/c", "start", "", targetPath], {
     detached: true,
     stdio: "ignore",
     windowsHide: true,
