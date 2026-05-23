@@ -1,7 +1,9 @@
 ﻿const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require("electron");
-const { autoUpdater } = require("electron-updater");
 const http = require("node:http");
 const path = require("node:path");
+const { Readable, Transform } = require("node:stream");
+const { pipeline } = require("node:stream/promises");
+const { createWriteStream } = require("node:fs");
 const { pathToFileURL } = require("node:url");
 const fs = require("fs/promises");
 
@@ -214,6 +216,16 @@ async function fetchLatestGithubRelease() {
 
     const data = await response.json();
     const version = normalizeReleaseVersion(data.tag_name, data.name);
+    const assets = Array.isArray(data.assets)
+      ? data.assets
+          .map((asset) => ({
+            name: String(asset?.name || ""),
+            browserDownloadUrl: String(asset?.browser_download_url || ""),
+            size: Number(asset?.size || 0),
+            contentType: String(asset?.content_type || ""),
+          }))
+          .filter((asset) => asset.name && asset.browserDownloadUrl)
+      : [];
 
     if (!version) {
       return {
@@ -227,6 +239,7 @@ async function fetchLatestGithubRelease() {
       version,
       tagName: data.tag_name,
       htmlUrl: data.html_url,
+      assets,
     };
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
@@ -245,11 +258,67 @@ async function fetchLatestGithubRelease() {
   }
 }
 
+function pickInstallerAsset(release) {
+  const assets = Array.isArray(release?.assets) ? release.assets : [];
+  const exeAsset = assets.find((asset) => String(asset?.name || "").toLowerCase().endsWith(".exe"));
+  return exeAsset || null;
+}
+
+async function downloadReleaseAsset(asset, version) {
+  const downloadsDir = path.join(app.getPath("userData"), "updates");
+  await fs.mkdir(downloadsDir, { recursive: true });
+
+  const targetPath = path.join(downloadsDir, asset.name);
+  const response = await fetch(asset.browserDownloadUrl, {
+    headers: {
+      accept: "application/octet-stream",
+      "user-agent": "CCTV Manager",
+    },
+  });
+
+  if (!response.ok || !response.body) {
+    throw new Error(`Не удалось скачать файл обновления (${response.status}).`);
+  }
+
+  const total = Number(response.headers.get("content-length") || asset.size || 0);
+  let transferred = 0;
+  const startedAt = Date.now();
+
+  const progressStream = new Transform({
+    transform(chunk, _encoding, callback) {
+      transferred += chunk.length;
+      const elapsedSeconds = Math.max((Date.now() - startedAt) / 1000, 0.001);
+      const bytesPerSecond = transferred > 0 ? transferred / elapsedSeconds : 0;
+      sendUpdateEvent({
+        type: "progress",
+        progress: {
+          percent: total > 0 ? (transferred / total) * 100 : 0,
+          transferred,
+          total,
+          bytesPerSecond,
+        },
+      });
+      callback(null, chunk);
+    },
+  });
+
+  await pipeline(Readable.fromWeb(response.body), progressStream, createWriteStream(targetPath));
+
+  const openResult = await shell.openPath(targetPath);
+  if (openResult) {
+    throw new Error(openResult);
+  }
+
+  return {
+    path: targetPath,
+    version,
+  };
+}
+
 app.setAppUserModelId("com.camplan.cctvmanager");
 
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
-  autoUpdater.autoDownload = false;
 
   ipcMain.handle("app:get-version", () => app.getVersion());
   ipcMain.handle("app:get-latest-release-version", async () => fetchLatestGithubRelease());
@@ -285,9 +354,18 @@ app.whenReady().then(() => {
         message: "Проверяем обновления на GitHub...",
       });
 
-      const result = await autoUpdater.checkForUpdates();
+      const release = await fetchLatestGithubRelease();
 
-      if (!result?.isUpdateAvailable) {
+      if (release.state !== "available" || !release.version) {
+        const message = release.message || "Не удалось получить версию GitHub Releases.";
+        sendUpdateEvent({ type: "error", message });
+        return {
+          state: "error",
+          message,
+        };
+      }
+
+      if (release.version === app.getVersion()) {
         const message = "Обновлено до последней версии.";
         sendUpdateEvent({ type: "not-available", message });
         return {
@@ -296,16 +374,27 @@ app.whenReady().then(() => {
         };
       }
 
-      const updateVersion = result.updateInfo.version;
+      const updateVersion = release.version;
+      const installerAsset = pickInstallerAsset(release);
+
+      if (!installerAsset) {
+        const message = `В релизе ${updateVersion} не найден Windows installer.`;
+        sendUpdateEvent({ type: "error", message });
+        return {
+          state: "error",
+          message,
+        };
+      }
+
       sendUpdateEvent({
         type: "available",
         version: updateVersion,
         message: `Найдена версия ${updateVersion}. Начинаем загрузку...`,
       });
 
-      await autoUpdater.downloadUpdate();
+      const downloaded = await downloadReleaseAsset(installerAsset, updateVersion);
 
-      const message = `Обновление ${updateVersion} скачано. Перезапустите программу, чтобы установить его.`;
+      const message = `Обновление ${updateVersion} скачано и запущено из ${downloaded.path}.`;
       sendUpdateEvent({
         type: "downloaded",
         version: updateVersion,
@@ -325,18 +414,6 @@ app.whenReady().then(() => {
         message,
       };
     }
-  });
-
-  autoUpdater.on("download-progress", (progress) => {
-    sendUpdateEvent({
-      type: "progress",
-      progress: {
-        percent: progress.percent,
-        transferred: progress.transferred,
-        total: progress.total,
-        bytesPerSecond: progress.bytesPerSecond,
-      },
-    });
   });
 
   ipcMain.handle("dialog:open-json", async () => {

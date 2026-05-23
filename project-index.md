@@ -61,3 +61,4 @@ Desktop-приложение `CCTV Manager` для Windows на базе React/V
 - Text draft now commits when clicking back on the map, so a stray canvas click no longer starts a fresh text item.
 - Text overlay no longer shows an Enter hint; text size is editable from the right panel.
 - Text elements no longer expose manual width/height fields; their block size follows label text and font size.
+- Ручной update flow больше не зависит от `electron-updater` cache path: кнопка `Обновить программу` скачивает последний GitHub release asset напрямую и запускает installer.
