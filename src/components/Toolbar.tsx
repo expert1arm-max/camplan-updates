@@ -1,7 +1,8 @@
-﻿import { Link } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import {
   Camera,
   Check,
+  CircleHelp,
   Download,
   DoorOpen,
   Eye,
@@ -21,7 +22,7 @@ import {
   Table2,
   Zap,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStore, deviceTypeLabels } from "@/data/store";
 import type { CableType, DeviceType, EditorMode } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -323,7 +324,7 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
         variant="outline"
         size="sm"
         className={cn(
-          "min-w-[176px] justify-center whitespace-nowrap",
+          "w-[220px] flex-none justify-center whitespace-nowrap",
           isEditMode &&
             "border-amber-500/30 bg-amber-500/15 text-amber-700 hover:bg-amber-500/20 dark:text-amber-300",
         )}
@@ -421,9 +422,6 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
           ))}
         </div>
       )}
-
-      <div className="ml-auto flex items-center gap-2 flex-wrap justify-end">
-      </div>
 
       <input
         ref={fileRef}
