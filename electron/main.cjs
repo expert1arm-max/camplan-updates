@@ -1,5 +1,6 @@
 ﻿const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require("electron");
 const http = require("node:http");
+const { spawn } = require("node:child_process");
 const path = require("node:path");
 const { Readable, Transform } = require("node:stream");
 const { pipeline } = require("node:stream/promises");
@@ -264,6 +265,34 @@ function pickInstallerAsset(release) {
   return exeAsset || null;
 }
 
+function escapePowerShellSingleQuoted(value) {
+  return String(value).replace(/'/g, "''");
+}
+
+function launchInstallerDetached(targetPath) {
+  const installerLiteral = `'${escapePowerShellSingleQuoted(targetPath)}'`;
+  const script = `Start-Process -LiteralPath ${installerLiteral}`;
+  const encodedCommand = Buffer.from(script, "utf16le").toString("base64");
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      "powershell.exe",
+      ["-NoProfile", "-WindowStyle", "Hidden", "-EncodedCommand", encodedCommand],
+      {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+      },
+    );
+
+    child.once("spawn", () => {
+      child.unref();
+      resolve();
+    });
+    child.once("error", reject);
+  });
+}
+
 async function downloadReleaseAsset(asset, version) {
   const downloadsDir = path.join(app.getPath("userData"), "updates");
   await fs.mkdir(downloadsDir, { recursive: true });
@@ -315,9 +344,13 @@ async function downloadReleaseAsset(asset, version) {
 
   await pipeline(Readable.fromWeb(response.body), progressStream, createWriteStream(targetPath));
 
-  const openError = await shell.openPath(targetPath);
-  if (openError) {
-    throw new Error(`Не удалось запустить installer: ${openError}`);
+  try {
+    await launchInstallerDetached(targetPath);
+  } catch {
+    const openError = await shell.openPath(targetPath);
+    if (openError) {
+      throw new Error(`Не удалось запустить installer: ${openError}`);
+    }
   }
 
   return {
