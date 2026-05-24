@@ -18,6 +18,7 @@ const githubReleaseRepoFallback = {
 };
 const updateDebugLogPath = path.join(os.tmpdir(), "CamPlanUpdateDebug.log");
 const updateErrorLogPath = path.join(os.tmpdir(), "CamPlanUpdateError.log");
+const updateLauncherScriptPath = path.join(os.tmpdir(), "CamPlanUpdateLauncher.ps1");
 let server;
 let mainWindow;
 let pendingDownloadedInstaller = null;
@@ -335,22 +336,75 @@ function escapePowerShellSingleQuotedString(value) {
   return String(value).replace(/'/g, "''");
 }
 
+function buildPowerShellUpdateLauncherScript({
+  installerPath,
+  parentPid = process.pid,
+  debugLogPath = updateDebugLogPath,
+  errorLogPath = updateErrorLogPath,
+}) {
+  const escapedInstallerPath = escapePowerShellSingleQuotedString(installerPath);
+  const escapedInstallerDir = escapePowerShellSingleQuotedString(path.dirname(installerPath));
+  const escapedDebugLogPath = escapePowerShellSingleQuotedString(debugLogPath);
+  const escapedErrorLogPath = escapePowerShellSingleQuotedString(errorLogPath);
+  const launchParentPid = Number(parentPid || process.pid);
+
+  return [
+    "$ErrorActionPreference = 'Stop'",
+    `$debugLogPath = '${escapedDebugLogPath}'`,
+    `$errorLogPath = '${escapedErrorLogPath}'`,
+    `$installerPath = '${escapedInstallerPath}'`,
+    `$installerDir = '${escapedInstallerDir}'`,
+    `$parentPid = ${launchParentPid}`,
+    "function Write-LauncherLog {",
+    "  param([string]$Message)",
+    "  Add-Content -LiteralPath $debugLogPath -Value ((Get-Date -Format o) + ' ' + $Message)",
+    "}",
+    "function Write-LauncherError {",
+    "  param([string]$Message)",
+    "  Add-Content -LiteralPath $errorLogPath -Value ((Get-Date -Format o) + ' ' + $Message)",
+    "}",
+    "try {",
+    "  Write-LauncherLog ('launcher start time: ' + (Get-Date -Format o))",
+    "  Write-LauncherLog ('script path: ' + $PSCommandPath)",
+    "  Write-LauncherLog ('target installer path: ' + $installerPath)",
+    "  Write-LauncherLog ('installer dir: ' + $installerDir)",
+    "  Write-LauncherLog ('parent pid: ' + $parentPid)",
+    "  Write-LauncherLog 'waiting for parent pid to exit'",
+    "  while (Get-Process -Id $parentPid -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 250 }",
+    "  Write-LauncherLog ('parent pid exited: ' + $parentPid)",
+    "  if (-not (Test-Path -LiteralPath $installerPath)) {",
+    "    throw ('Installer not found: ' + $installerPath)",
+    "  }",
+    "  Write-LauncherLog 'installer file exists'",
+    "  Start-Process -FilePath $installerPath -WorkingDirectory $installerDir",
+    "  Write-LauncherLog 'installer launch success'",
+    "} catch {",
+    "  $errorText = ($_ | Out-String).Trim()",
+    "  Write-LauncherError $errorText",
+    "  Write-LauncherLog ('launcher error: ' + $errorText)",
+    "  throw",
+    "}",
+  ].join("\r\n") + "\r\n";
+}
+
 async function launchInstallerAfterExit(targetPath, parentPid = process.pid) {
   const absoluteInstallerPath = normalizeAbsolutePath(targetPath);
   const absoluteCheck = path.isAbsolute(absoluteInstallerPath);
   const exists = existsSync(absoluteInstallerPath);
   const installerDir = path.dirname(absoluteInstallerPath);
-  const escapedInstallerPath = escapePowerShellSingleQuotedString(absoluteInstallerPath);
-  const escapedInstallerDir = escapePowerShellSingleQuotedString(installerDir);
   const launchParentPid = Number(parentPid || process.pid);
-  const powershellCommand = `while (Get-Process -Id ${launchParentPid} -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 200 }; Start-Process -FilePath '${escapedInstallerPath}' -WorkingDirectory '${escapedInstallerDir}'`;
+  const launcherScript = buildPowerShellUpdateLauncherScript({
+    installerPath: absoluteInstallerPath,
+    parentPid: launchParentPid,
+  });
 
   logUpdateDebug("downloaded installer path:", absoluteInstallerPath);
-  logUpdateDebug("selected launch method:", "powershell-hidden-detached");
+  logUpdateDebug("generated launcher script path:", updateLauncherScriptPath);
+  logUpdateDebug("selected launch method:", "powershell-hidden-script");
   logUpdateDebug("waiting for app pid:", String(launchParentPid));
   logUpdateDebug("path.isAbsolute:", String(absoluteCheck));
   logUpdateDebug("fs.existsSync:", String(exists));
-  logUpdateDebug("powershell command:", powershellCommand);
+  logUpdateDebug("process.pid:", String(process.pid));
 
   if (!absoluteCheck) {
     const message = `Путь к установщику должен быть абсолютным: ${absoluteInstallerPath}`;
@@ -367,24 +421,67 @@ async function launchInstallerAfterExit(targetPath, parentPid = process.pid) {
   const stats = await fs.stat(absoluteInstallerPath);
   logUpdateDebug("installer size bytes:", String(stats.size));
 
-  const result = await spawnDetachedProcess("powershell.exe", [
-    "-NoProfile",
-    "-ExecutionPolicy",
-    "Bypass",
-    "-WindowStyle",
-    "Hidden",
-    "-Command",
-    powershellCommand,
-  ], {
-    windowsHide: true,
-  });
-  logUpdateDebug("launcher spawn result:", `spawned pid=${result.pid ?? "unknown"}`);
+  await fs.writeFile(updateLauncherScriptPath, launcherScript, "utf8");
+  logUpdateDebug("launcher script written:", updateLauncherScriptPath);
 
-  return {
-    method: "powershell-hidden-detached",
-    path: absoluteInstallerPath,
-    command: powershellCommand,
-  };
+  try {
+    const result = await spawnDetachedProcess("powershell.exe", [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-WindowStyle",
+      "Hidden",
+      "-File",
+      updateLauncherScriptPath,
+    ], {
+      windowsHide: true,
+    });
+    logUpdateDebug("launcher spawn result:", `spawned pid=${result.pid ?? "unknown"}`);
+
+    return {
+      method: "powershell-hidden-script",
+      path: absoluteInstallerPath,
+      scriptPath: updateLauncherScriptPath,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logUpdateError("powershell launcher spawn failed:", errorMessage);
+    logUpdateDebug("fallback launch method:", "shell.openPath");
+
+    const shellResult = await shell.openPath(absoluteInstallerPath);
+    if (!shellResult) {
+      logUpdateDebug("fallback launch result:", "shell.openPath success");
+      return {
+        method: "shell.openPath",
+        path: absoluteInstallerPath,
+        scriptPath: updateLauncherScriptPath,
+      };
+    }
+
+    logUpdateError("shell.openPath failed:", shellResult);
+    logUpdateDebug("fallback launch method:", "detached-cmd-start");
+
+    try {
+      const result = await spawnDetachedProcess("cmd.exe", [
+        "/c",
+        "start",
+        "",
+        absoluteInstallerPath,
+      ], {
+        windowsHide: true,
+      });
+      logUpdateDebug("fallback launch result:", `cmd spawned pid=${result.pid ?? "unknown"}`);
+      return {
+        method: "detached-cmd-start",
+        path: absoluteInstallerPath,
+        scriptPath: updateLauncherScriptPath,
+      };
+    } catch (fallbackError) {
+      const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+      logUpdateError("detached cmd fallback failed:", fallbackMessage);
+      throw new Error(`Не удалось запустить установщик: ${errorMessage}; fallback: ${fallbackMessage}`);
+    }
+  }
 }
 
 async function downloadReleaseAsset(asset, version) {
@@ -582,12 +679,10 @@ app.whenReady().then(() => {
       closeAllAppWindowsForUpdate();
       const launchResult = await launchInstallerAfterExit(installerPath, process.pid);
       logUpdateDebug("launch method completed:", launchResult.method);
-      logUpdateDebug("launch command used:", launchResult.command);
+      logUpdateDebug("launch script used:", launchResult.scriptPath);
       pendingDownloadedInstaller = null;
-      setImmediate(() => {
-        logUpdateDebug("app.exit(0) scheduled after installer launch");
-        app.exit(0);
-      });
+      logUpdateDebug("app.exit(0) after installer launcher spawn");
+      app.exit(0);
     } catch (error) {
       logUpdateError("installer launch failed:", error instanceof Error ? error.message : error);
       pendingDownloadedInstaller.launchScheduled = false;
