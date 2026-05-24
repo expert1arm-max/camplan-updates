@@ -5,7 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { Readable, Transform } = require("node:stream");
 const { pipeline } = require("node:stream/promises");
-const { createWriteStream, existsSync, appendFileSync, writeFileSync } = require("node:fs");
+const { createWriteStream, existsSync, appendFileSync } = require("node:fs");
 const { pathToFileURL } = require("node:url");
 const fs = require("fs/promises");
 
@@ -18,7 +18,6 @@ const githubReleaseRepoFallback = {
 };
 const updateDebugLogPath = path.join(os.tmpdir(), "CamPlanUpdateDebug.log");
 const updateErrorLogPath = path.join(os.tmpdir(), "CamPlanUpdateError.log");
-const updateLauncherPath = path.join(os.tmpdir(), "CamPlanUpdateLauncher.cmd");
 let server;
 let mainWindow;
 let pendingDownloadedInstaller = null;
@@ -332,32 +331,24 @@ function normalizeAbsolutePath(targetPath) {
   return path.isAbsolute(resolvedPath) ? resolvedPath : path.resolve(resolvedPath);
 }
 
-function buildLauncherCmdContent(installerPath) {
-  return [
-    "@echo off",
-    "setlocal",
-    "timeout /t 5 /nobreak >nul",
-    `if not exist "${installerPath}" (`,
-    `  echo Installer not found: "${installerPath}" > "${updateErrorLogPath}"`,
-    "  pause",
-    "  exit /b 1",
-    ")",
-    `start "" "${installerPath}"`,
-    "exit /b 0",
-    "",
-  ].join(os.EOL);
+function escapePowerShellSingleQuotedString(value) {
+  return String(value).replace(/'/g, "''");
 }
 
 async function launchInstallerAfterExit(targetPath) {
   const absoluteInstallerPath = normalizeAbsolutePath(targetPath);
   const absoluteCheck = path.isAbsolute(absoluteInstallerPath);
   const exists = existsSync(absoluteInstallerPath);
+  const installerDir = path.dirname(absoluteInstallerPath);
+  const escapedInstallerPath = escapePowerShellSingleQuotedString(absoluteInstallerPath);
+  const escapedInstallerDir = escapePowerShellSingleQuotedString(installerDir);
+  const powershellCommand = `Start-Sleep -Seconds 2; Start-Process -FilePath '${escapedInstallerPath}' -WorkingDirectory '${escapedInstallerDir}'`;
 
   logUpdateDebug("downloaded installer path:", absoluteInstallerPath);
-  logUpdateDebug("launcher path:", updateLauncherPath);
-  logUpdateDebug("selected launch method:", "temp-cmd-file");
+  logUpdateDebug("selected launch method:", "powershell-hidden-detached");
   logUpdateDebug("path.isAbsolute:", String(absoluteCheck));
   logUpdateDebug("fs.existsSync:", String(exists));
+  logUpdateDebug("powershell command:", powershellCommand);
 
   if (!absoluteCheck) {
     const message = `Путь к установщику должен быть абсолютным: ${absoluteInstallerPath}`;
@@ -374,20 +365,21 @@ async function launchInstallerAfterExit(targetPath) {
   const stats = await fs.stat(absoluteInstallerPath);
   logUpdateDebug("installer size bytes:", String(stats.size));
 
-  const launcherContent = buildLauncherCmdContent(absoluteInstallerPath);
-  writeFileSync(updateLauncherPath, launcherContent, { encoding: "utf8" });
-  logUpdateDebug("launcher cmd written:", updateLauncherPath);
-  logUpdateDebug("launcher cmd content:", launcherContent);
-
-  const result = await spawnDetachedProcess("cmd.exe", ["/c", updateLauncherPath], {
+  const result = await spawnDetachedProcess("powershell.exe", [
+    "-NoProfile",
+    "-WindowStyle",
+    "Hidden",
+    "-Command",
+    powershellCommand,
+  ], {
     windowsHide: true,
   });
-  logUpdateDebug("launcher cmd spawn result:", `spawned pid=${result.pid ?? "unknown"}`);
+  logUpdateDebug("launcher spawn result:", `spawned pid=${result.pid ?? "unknown"}`);
 
   return {
-    method: "cmd-file",
+    method: "powershell-hidden-detached",
     path: absoluteInstallerPath,
-    launcherPath: updateLauncherPath,
+    command: powershellCommand,
   };
 }
 
@@ -586,7 +578,7 @@ app.whenReady().then(() => {
       closeAllAppWindowsForUpdate();
       const launchResult = await launchInstallerAfterExit(installerPath);
       logUpdateDebug("launch method completed:", launchResult.method);
-      logUpdateDebug("launcher path launched:", launchResult.launcherPath);
+      logUpdateDebug("launch command used:", launchResult.command);
       pendingDownloadedInstaller = null;
       setImmediate(() => {
         logUpdateDebug("app.exit(0) scheduled after installer launch");

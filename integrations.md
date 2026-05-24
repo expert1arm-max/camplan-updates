@@ -21,7 +21,7 @@
 ## Packaging
 - `npm run build` собирает frontend.
 - `npm run dist:win` собирает Windows installer.
-- Current packaged installer version is `0.2.19`.
+- Current packaged installer version is `0.2.20`.
 
 ## GitHub Releases
 - Release automation uses GitHub Actions.
@@ -34,7 +34,7 @@
 - Packaged builds also use a runtime fallback repo in `electron/main.cjs`, so the app can still find the release repository even if `build.publish` is not present in the shipped `package.json`.
 - Update installation now downloads the latest GitHub release `.exe` asset directly and opens it from Electron main; `electron-updater` is no longer used for the download step.
 - The direct download path now normalizes the installer asset name with a fallback filename so incomplete release metadata cannot crash `path.join(...)`.
-- After the installer is downloaded, the renderer waits for user confirmation, then Electron main writes a temp `CamPlanUpdateLauncher.cmd`, logs the absolute installer path to `%TEMP%\CamPlanUpdateDebug.log`, and launches that batch file detached so the app can quit cleanly before NSIS opens.
-- The temp launcher waits 5 seconds before starting the installer and Electron main exits immediately after the helper is spawned so NSIS does not see the app as still running.
+- After the installer is downloaded, the renderer waits for user confirmation, then Electron main logs the absolute installer path to `%TEMP%\CamPlanUpdateDebug.log` and launches a hidden detached PowerShell helper so the app can quit cleanly before NSIS opens.
+- The hidden detached PowerShell helper waits 2 seconds and starts the installer with no visible console window.
 - A custom `build/installer.nsh` override replaces the default app-running check with a no-op because the update flow already closes CamPlan before NSIS starts.
-- The temp launcher batch is now spawned hidden during QA and writes missing-installer details to `%TEMP%\CamPlanUpdateError.log` when the file cannot be found.
+- The PowerShell helper is spawned hidden during QA and the existing debug/error logs still capture missing-installer details if the file cannot be found.
