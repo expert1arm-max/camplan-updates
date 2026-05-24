@@ -405,6 +405,13 @@ async function launchInstallerAfterExit(targetPath) {
     installerPath: absoluteInstallerPath,
   });
 
+  if (launcherScript.includes("parentPid") || launcherScript.includes("Get-Process -Id")) {
+    const message =
+      "Launcher script generation regression: parentPid or Get-Process -Id detected.";
+    logUpdateError(message);
+    throw new Error(message);
+  }
+
   logUpdateDebug("downloaded installer path:", absoluteInstallerPath);
   logUpdateDebug("generated launcher script path:", updateLauncherScriptPath);
   logUpdateDebug("selected launch method:", "powershell-hidden-script");

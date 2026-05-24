@@ -21,7 +21,7 @@
 ## Packaging
 - `npm run build` собирает frontend.
 - `npm run dist:win` собирает Windows installer.
-- Current packaged installer version is `0.2.23`.
+- Current packaged installer version is `0.2.24`.
 
 ## GitHub Releases
 - Release automation uses GitHub Actions.
@@ -38,4 +38,5 @@
 - The hidden detached PowerShell helper waits briefly, then checks for `CamPlan.exe` by process name and starts the installer only after it disappears.
 - If PowerShell spawn fails, Electron main falls back to `shell.openPath` and then detached `cmd start`, logging which fallback path was used.
 - A custom `build/installer.nsh` override replaces the default app-running check with a no-op because the update flow already closes CamPlan before NSIS starts.
+- The current electron-builder schema does not accept a `closeRunningApp` NSIS option, so the no-op `build/installer.nsh` remains the actual guard that prevents the installer from trying to close CamPlan again. The launcher generation now fails fast if `parentPid` or `Get-Process -Id` ever appear in the generated PowerShell script.
 - The PowerShell helper is spawned hidden during QA and the existing debug/error logs still capture missing-installer details if the file cannot be found.
