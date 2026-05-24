@@ -576,12 +576,8 @@ app.whenReady().then(() => {
       logUpdateDebug("launcher path launched:", launchResult.launcherPath);
       pendingDownloadedInstaller = null;
       setImmediate(() => {
-        logUpdateDebug("app.quit() scheduled after installer launch");
-        app.quit();
-        setTimeout(() => {
-          logUpdateDebug("app.exit(0) fallback triggered after launcher start");
-          app.exit(0);
-        }, 1000);
+        logUpdateDebug("app.exit(0) scheduled after installer launch");
+        app.exit(0);
       });
     } catch (error) {
       logUpdateError("installer launch failed:", error instanceof Error ? error.message : error);

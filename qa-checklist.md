@@ -6,7 +6,7 @@
 - [x] `npm run dist:win`
 
 ## Electron startup
-- [ ] Запустить свежий Windows installer `release\CamPlan Setup 0.2.16.exe`.
+- [ ] Запустить свежий Windows installer `release\CamPlan Setup 0.2.17.exe`.
 - [ ] Проверить, что UI открывается со стилями и без black screen.
 - [ ] Проверить, что приложение стартует в режиме `Просмотр`.
 - [ ] Переключиться в `Редактирование` и обратно.
@@ -76,10 +76,10 @@
 - [ ] Verify clicking update downloads the installer, the dialog asks for confirmation, the app closes, and the installer opens exactly once after the app exits.
 - [ ] Verify NSIS does not ask to close CCTV Manager during the confirmed update flow.
 - [ ] Verify the installation completes after the app quits and the detached installer starts.
-- [ ] Verify the locally built `release\CamPlan Setup 0.2.16.exe` before publishing the release.
+- [ ] Verify the locally built `release\CamPlan Setup 0.2.17.exe` before publishing the release.
 - [ ] After a failed update, check `%TEMP%\CamPlanUpdateDebug.log` and `%TEMP%\CamPlanUpdateError.log`.
 - [ ] Verify the downloaded installer path exists manually before the launcher runs.
-- [ ] Verify the installer prompt no longer shows a "failed to close CCTV Manager" message after the app window closes.
+- [ ] Verify the installer prompt no longer shows a "failed to close CamPlan" message after the app window closes.
 - [ ] Проверить, что после нажатия `+` у строки объекта создаётся дочерняя зона/этаж, а фокус переходит на план/canvas.
 - [ ] Проверить, что ручное переименование объекта и зоны через карандаш или double click остаётся редактируемым.
 - [ ] Проверить, что в поле переименования объекта/зоны работают обычный ввод, Backspace, Delete и вставка текста без дополнительного клика по экрану.
