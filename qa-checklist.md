@@ -22,7 +22,7 @@
 - [ ] Проверить, что центральная CTA-кнопка реально кликается и не блокируется overlay-слоем.
 - [ ] Проверить, что кнопка `+` в левой панели открывает JSON-файл проекта с компьютера и импортирует его в текущее состояние.
 - [ ] Проверить, что `Файл -> Новый проект` спрашивает подтверждение и предлагает `Сохранить`, `Нет` и `Отмена` перед очисткой текущего проекта.
-- [ ] Verify restart restores the last project from IndexedDB or the `localStorage` backup fallback.
+- [ ] Verify restart restores the last project from the freshest persisted snapshot between IndexedDB and the `localStorage` backup.
 - [ ] Проверить восстановление activeObjectId / activeFloorId при валидных сохранённых данных.
 - [ ] Проверить fallback, если active object или floor удалён: выбирается первый доступный object и первый floor внутри него.
 

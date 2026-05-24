@@ -5,7 +5,7 @@
 MVP desktop-версии реализован. Сейчас проект находится на этапе ручной QA-проверки Electron-сборки и доведения UX-мелочей.
 
 ## Сейчас
-- Verify startup restores the last project using IndexedDB with a `localStorage` backup fallback when IndexedDB is unavailable or stale.
+- Verify startup restores the last project by selecting the freshest persisted snapshot between IndexedDB and the `localStorage` backup, instead of trusting backup storage first.
 - Verify Save Project, JPG export, and CSV export stay disabled while the project is empty and become active only after content exists.
 - Проверить, что при запуске приложение тихо проверяет latest release на GitHub, а кнопка `О программе` подсвечивается зелёным при наличии более новой версии.
 - Проверить, что в empty-state центральная кнопка `+` открывает JSON-проект с компьютера и скрывается после появления объектов.

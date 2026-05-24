@@ -10,7 +10,7 @@
 - IndexedDB в renderer.
 - Локально сохраняется полный `AppData` snapshot.
 - `localStorage` не используется как основное хранилище.
-- `localStorage` stores a backup copy of the latest snapshot and is used as a startup fallback when IndexedDB is missing or stale.
+- `localStorage` stores a backup copy of the latest snapshot, and startup now compares it with IndexedDB so the freshest persisted snapshot is restored.
 
 ## Import / export
 - JSON import/export для полного snapshot проекта.

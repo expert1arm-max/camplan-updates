@@ -64,6 +64,8 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value));
 }
 
+type PersistedSnapshot = AppData & { savedAt?: number };
+
 function getBackupStorage() {
   if (typeof localStorage === "undefined") return null;
   return localStorage;
@@ -188,6 +190,46 @@ function writeBackupRaw(value: unknown) {
   } catch {
     // localStorage is a best-effort backup for the latest project snapshot.
   }
+}
+
+function readPersistedSavedAt(value: unknown): number {
+  if (!isRecord(value)) return 0;
+  const savedAt = Number(value.savedAt);
+  return Number.isFinite(savedAt) ? savedAt : 0;
+}
+
+function countSnapshotContent(value: unknown): number {
+  if (!isRecord(value)) return 0;
+  const snapshot = normalizeAppData(value);
+  return [
+    snapshot.objects.length,
+    snapshot.floors.length,
+    snapshot.mapElements.length,
+    snapshot.devices.length,
+    snapshot.deviceConnections.length,
+  ].reduce((sum, count) => sum + count, 0);
+}
+
+function pickLatestSnapshot(primary: unknown | null, backup: unknown | null): unknown | null {
+  if (!primary && !backup) return null;
+  if (!primary) return backup;
+  if (!backup) return primary;
+
+  const primarySavedAt = readPersistedSavedAt(primary);
+  const backupSavedAt = readPersistedSavedAt(backup);
+
+  if (primarySavedAt !== backupSavedAt) {
+    return primarySavedAt > backupSavedAt ? primary : backup;
+  }
+
+  const primaryCount = countSnapshotContent(primary);
+  const backupCount = countSnapshotContent(backup);
+
+  if (primaryCount !== backupCount) {
+    return primaryCount > backupCount ? primary : backup;
+  }
+
+  return primary;
 }
 
 function normalizeSettings(input: unknown): AppSettings {
@@ -432,17 +474,18 @@ export function normalizeAppData(input: unknown): AppData {
 
 export async function loadAppData(): Promise<AppData | null> {
   try {
-    const backupRaw = readBackupRaw();
-    if (backupRaw) return normalizeAppData(backupRaw);
-
     const raw = await readRaw();
-    if (!raw) return null;
-    return normalizeAppData(raw);
+    const backupRaw = readBackupRaw();
+    const latest = pickLatestSnapshot(raw, backupRaw);
+    if (!latest) return null;
+    return normalizeAppData(latest);
   } catch {
     try {
       const raw = await readRaw();
-      if (!raw) return null;
-      return normalizeAppData(raw);
+      const backupRaw = readBackupRaw();
+      const latest = pickLatestSnapshot(raw, backupRaw);
+      if (!latest) return null;
+      return normalizeAppData(latest);
     } catch {
       return null;
     }
@@ -450,7 +493,10 @@ export async function loadAppData(): Promise<AppData | null> {
 }
 
 export async function saveAppData(data: AppData): Promise<void> {
-  const snapshot = clone(data);
+  const snapshot: PersistedSnapshot = {
+    ...clone(data),
+    savedAt: Date.now(),
+  };
   writeBackupRaw(snapshot);
   await writeRaw(snapshot);
 }
