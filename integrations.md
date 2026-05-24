@@ -34,5 +34,5 @@
 - Packaged builds also use a runtime fallback repo in `electron/main.cjs`, so the app can still find the release repository even if `build.publish` is not present in the shipped `package.json`.
 - Update installation now downloads the latest GitHub release `.exe` asset directly and opens it from Electron main; `electron-updater` is no longer used for the download step.
 - The direct download path now normalizes the installer asset name with a fallback filename so incomplete release metadata cannot crash `path.join(...)`.
-- After the installer is downloaded, the renderer waits for user confirmation, then Electron main starts it from a detached `cmd.exe /c timeout /t 3 /nobreak >nul & start "" "<installerPath>"` helper so the app can quit cleanly before NSIS opens.
-- If the detached `cmd.exe` helper fails, Electron main falls back to a detached direct `spawn(installerPath, [], { detached: true, stdio: "ignore", windowsHide: false })` launch.
+- After the installer is downloaded, the renderer waits for user confirmation, then Electron main writes a temp `CamPlanUpdateLauncher.cmd`, logs the absolute installer path to `%TEMP%\CamPlanUpdateDebug.log`, and launches that batch file detached so the app can quit cleanly before NSIS opens.
+- The temp launcher batch keeps a visible cmd window during QA and writes missing-installer details to `%TEMP%\CamPlanUpdateError.log` when the file cannot be found.

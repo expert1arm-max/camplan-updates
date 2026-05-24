@@ -1,10 +1,11 @@
 ﻿const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require("electron");
 const http = require("node:http");
 const { spawn } = require("node:child_process");
+const os = require("node:os");
 const path = require("node:path");
 const { Readable, Transform } = require("node:stream");
 const { pipeline } = require("node:stream/promises");
-const { createWriteStream } = require("node:fs");
+const { createWriteStream, existsSync, appendFileSync, writeFileSync } = require("node:fs");
 const { pathToFileURL } = require("node:url");
 const fs = require("fs/promises");
 
@@ -15,6 +16,9 @@ const githubReleaseRepoFallback = {
   owner: "expert1arm-max",
   repo: "camplan-updates",
 };
+const updateDebugLogPath = path.join(os.tmpdir(), "CamPlanUpdateDebug.log");
+const updateErrorLogPath = path.join(os.tmpdir(), "CamPlanUpdateError.log");
+const updateLauncherPath = path.join(os.tmpdir(), "CamPlanUpdateLauncher.cmd");
 let server;
 let mainWindow;
 let pendingDownloadedInstaller = null;
@@ -275,9 +279,19 @@ function logUpdateInstallError(...parts) {
   console.error(updateInstallLogPrefix, ...parts);
 }
 
-function getSystemExecutablePath(executableName) {
-  const systemRoot = process.env.SystemRoot || "C:\\Windows";
-  return path.join(systemRoot, "System32", executableName);
+function appendUpdateTempLog(logPath, ...parts) {
+  const line = `[${new Date().toISOString()}] ${parts.map((part) => String(part)).join(" ")}${os.EOL}`;
+  appendFileSync(logPath, line, "utf8");
+}
+
+function logUpdateDebug(...parts) {
+  appendUpdateTempLog(updateDebugLogPath, ...parts);
+  logUpdateInstall(...parts);
+}
+
+function logUpdateError(...parts) {
+  appendUpdateTempLog(updateErrorLogPath, ...parts);
+  logUpdateInstallError(...parts);
 }
 
 function spawnDetachedProcess(executable, args, options = {}) {
@@ -306,51 +320,63 @@ function normalizeAbsolutePath(targetPath) {
   return path.isAbsolute(resolvedPath) ? resolvedPath : path.resolve(resolvedPath);
 }
 
-function buildDelayedLaunchCommand(installerPath, delaySeconds) {
-  const safeDelaySeconds = Number.isFinite(delaySeconds) && delaySeconds > 0 ? Math.floor(delaySeconds) : 3;
-  return `timeout /t ${safeDelaySeconds} /nobreak >nul & start "" "${installerPath}"`;
+function buildLauncherCmdContent(installerPath) {
+  return [
+    "@echo off",
+    "setlocal",
+    "timeout /t 3 /nobreak >nul",
+    `if not exist "${installerPath}" (`,
+    `  echo Installer not found: "${installerPath}" > "${updateErrorLogPath}"`,
+    "  pause",
+    "  exit /b 1",
+    ")",
+    `start "" "${installerPath}"`,
+    "exit /b 0",
+    "",
+  ].join(os.EOL);
 }
 
-async function launchInstallerAfterExit(targetPath, delaySeconds = 3) {
+async function launchInstallerAfterExit(targetPath) {
   const absoluteInstallerPath = normalizeAbsolutePath(targetPath);
-  const command = buildDelayedLaunchCommand(absoluteInstallerPath, delaySeconds);
+  const absoluteCheck = path.isAbsolute(absoluteInstallerPath);
+  const exists = existsSync(absoluteInstallerPath);
 
-  logUpdateInstall("selected launch method:", "detached-cmd-timeout");
-  logUpdateInstall("installer path:", absoluteInstallerPath);
-  logUpdateInstall("cmd command:", command);
+  logUpdateDebug("downloaded installer path:", absoluteInstallerPath);
+  logUpdateDebug("launcher path:", updateLauncherPath);
+  logUpdateDebug("selected launch method:", "temp-cmd-file");
+  logUpdateDebug("path.isAbsolute:", String(absoluteCheck));
+  logUpdateDebug("fs.existsSync:", String(exists));
 
-  try {
-    await fs.access(absoluteInstallerPath);
-    logUpdateInstall("file exists before launch:", true);
-  } catch (error) {
-    logUpdateInstall("file exists before launch:", false);
-    throw new Error(`Установщик не найден перед запуском: ${absoluteInstallerPath}`);
+  if (!absoluteCheck) {
+    const message = `Путь к установщику должен быть абсолютным: ${absoluteInstallerPath}`;
+    logUpdateError(message);
+    throw new Error(message);
+  }
+
+  if (!exists) {
+    const message = `Установщик не найден: ${absoluteInstallerPath}`;
+    logUpdateError(message);
+    throw new Error(message);
   }
 
   const stats = await fs.stat(absoluteInstallerPath);
-  logUpdateInstall("installer size bytes:", stats.size);
+  logUpdateDebug("installer size bytes:", String(stats.size));
 
-  try {
-    const result = await spawnDetachedProcess("cmd.exe", ["/c", command], {
-      windowsHide: true,
-    });
-    logUpdateInstall("scheduled task command result:", "not used");
-    logUpdateInstall("cmd helper spawn result:", `spawned pid=${result.pid ?? "unknown"}`);
-    return {
-      method: "cmd",
-      path: absoluteInstallerPath,
-    };
-  } catch (error) {
-    logUpdateInstallError("cmd helper failed, using fallback process spawn:", error instanceof Error ? error.message : error);
-    const fallbackResult = await spawnDetachedProcess(absoluteInstallerPath, [], {
-      windowsHide: false,
-    });
-    logUpdateInstall("fallback process spawn result:", `spawned pid=${fallbackResult.pid ?? "unknown"}`);
-    return {
-      method: "spawn",
-      path: absoluteInstallerPath,
-    };
-  }
+  const launcherContent = buildLauncherCmdContent(absoluteInstallerPath);
+  writeFileSync(updateLauncherPath, launcherContent, { encoding: "utf8" });
+  logUpdateDebug("launcher cmd written:", updateLauncherPath);
+  logUpdateDebug("launcher cmd content:", launcherContent);
+
+  const result = await spawnDetachedProcess("cmd.exe", ["/c", updateLauncherPath], {
+    windowsHide: false,
+  });
+  logUpdateDebug("launcher cmd spawn result:", `spawned pid=${result.pid ?? "unknown"}`);
+
+  return {
+    method: "cmd-file",
+    path: absoluteInstallerPath,
+    launcherPath: updateLauncherPath,
+  };
 }
 
 async function downloadReleaseAsset(asset, version) {
@@ -403,6 +429,8 @@ async function downloadReleaseAsset(asset, version) {
   });
 
   await pipeline(Readable.fromWeb(response.body), progressStream, createWriteStream(targetPath));
+
+  logUpdateDebug("downloaded installer saved to:", path.resolve(targetPath));
 
   return {
     path: path.resolve(targetPath),
@@ -539,19 +567,20 @@ app.whenReady().then(() => {
 
     pendingDownloadedInstaller.launchScheduled = true;
     const installerPath = normalizeAbsolutePath(pendingDownloadedInstaller.path);
-    logUpdateInstall("launch requested");
-    logUpdateInstall("downloaded installer path:", installerPath);
+    logUpdateDebug("launch requested");
+    logUpdateDebug("downloaded installer path:", installerPath);
 
     try {
-      const launchResult = await launchInstallerAfterExit(installerPath, 3);
-      logUpdateInstall("launch method completed:", launchResult.method);
+      const launchResult = await launchInstallerAfterExit(installerPath);
+      logUpdateDebug("launch method completed:", launchResult.method);
+      logUpdateDebug("launcher path launched:", launchResult.launcherPath);
       pendingDownloadedInstaller = null;
       setImmediate(() => {
-        logUpdateInstall("app.quit() scheduled after installer launch");
+        logUpdateDebug("app.quit() scheduled after installer launch");
         app.quit();
       });
     } catch (error) {
-      logUpdateInstallError("installer launch failed:", error instanceof Error ? error.message : error);
+      logUpdateError("installer launch failed:", error instanceof Error ? error.message : error);
       pendingDownloadedInstaller.launchScheduled = false;
       const message = error instanceof Error ? error.message : "Не удалось запустить installer.";
       return {
