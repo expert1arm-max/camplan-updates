@@ -338,7 +338,6 @@ function escapePowerShellSingleQuotedString(value) {
 
 function buildPowerShellUpdateLauncherScript({
   installerPath,
-  parentPid = process.pid,
   debugLogPath = updateDebugLogPath,
   errorLogPath = updateErrorLogPath,
 }) {
@@ -346,7 +345,6 @@ function buildPowerShellUpdateLauncherScript({
   const escapedInstallerDir = escapePowerShellSingleQuotedString(path.dirname(installerPath));
   const escapedDebugLogPath = escapePowerShellSingleQuotedString(debugLogPath);
   const escapedErrorLogPath = escapePowerShellSingleQuotedString(errorLogPath);
-  const launchParentPid = Number(parentPid || process.pid);
 
   return [
     "$ErrorActionPreference = 'Stop'",
@@ -354,7 +352,6 @@ function buildPowerShellUpdateLauncherScript({
     `$errorLogPath = '${escapedErrorLogPath}'`,
     `$installerPath = '${escapedInstallerPath}'`,
     `$installerDir = '${escapedInstallerDir}'`,
-    `$parentPid = ${launchParentPid}`,
     "function Write-LauncherLog {",
     "  param([string]$Message)",
     "  Add-Content -LiteralPath $debugLogPath -Value ((Get-Date -Format o) + ' ' + $Message)",
@@ -368,10 +365,22 @@ function buildPowerShellUpdateLauncherScript({
     "  Write-LauncherLog ('script path: ' + $PSCommandPath)",
     "  Write-LauncherLog ('target installer path: ' + $installerPath)",
     "  Write-LauncherLog ('installer dir: ' + $installerDir)",
-    "  Write-LauncherLog ('parent pid: ' + $parentPid)",
-    "  Write-LauncherLog 'waiting for parent pid to exit'",
-    "  while (Get-Process -Id $parentPid -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 250 }",
-    "  Write-LauncherLog ('parent pid exited: ' + $parentPid)",
+    "  Start-Sleep -Milliseconds 1500",
+    "  $maxWait = 20",
+    "  $count = 0",
+    "  $running = Get-Process CamPlan -ErrorAction SilentlyContinue",
+    "  Write-LauncherLog ('initial CamPlan.exe running: ' + [bool]$running)",
+    "  while ($count -lt $maxWait) {",
+    "    $running = Get-Process CamPlan -ErrorAction SilentlyContinue",
+    "    if (-not $running) {",
+    "      break",
+    "    }",
+    "    Write-LauncherLog ('CamPlan.exe still running, retry: ' + $count)",
+    "    Start-Sleep -Milliseconds 500",
+    "    $count++",
+    "  }",
+    "  Write-LauncherLog ('CamPlan.exe final running state: ' + [bool](Get-Process CamPlan -ErrorAction SilentlyContinue))",
+    "  Write-LauncherLog ('retry count: ' + $count)",
     "  if (-not (Test-Path -LiteralPath $installerPath)) {",
     "    throw ('Installer not found: ' + $installerPath)",
     "  }",
@@ -387,21 +396,18 @@ function buildPowerShellUpdateLauncherScript({
   ].join("\r\n") + "\r\n";
 }
 
-async function launchInstallerAfterExit(targetPath, parentPid = process.pid) {
+async function launchInstallerAfterExit(targetPath) {
   const absoluteInstallerPath = normalizeAbsolutePath(targetPath);
   const absoluteCheck = path.isAbsolute(absoluteInstallerPath);
   const exists = existsSync(absoluteInstallerPath);
   const installerDir = path.dirname(absoluteInstallerPath);
-  const launchParentPid = Number(parentPid || process.pid);
   const launcherScript = buildPowerShellUpdateLauncherScript({
     installerPath: absoluteInstallerPath,
-    parentPid: launchParentPid,
   });
 
   logUpdateDebug("downloaded installer path:", absoluteInstallerPath);
   logUpdateDebug("generated launcher script path:", updateLauncherScriptPath);
   logUpdateDebug("selected launch method:", "powershell-hidden-script");
-  logUpdateDebug("waiting for app pid:", String(launchParentPid));
   logUpdateDebug("path.isAbsolute:", String(absoluteCheck));
   logUpdateDebug("fs.existsSync:", String(exists));
   logUpdateDebug("process.pid:", String(process.pid));
@@ -677,7 +683,7 @@ app.whenReady().then(() => {
 
     try {
       closeAllAppWindowsForUpdate();
-      const launchResult = await launchInstallerAfterExit(installerPath, process.pid);
+      const launchResult = await launchInstallerAfterExit(installerPath);
       logUpdateDebug("launch method completed:", launchResult.method);
       logUpdateDebug("launch script used:", launchResult.scriptPath);
       pendingDownloadedInstaller = null;

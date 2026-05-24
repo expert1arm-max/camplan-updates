@@ -80,6 +80,7 @@
 - [ ] Verify the locally built `release\CamPlan-Installer-0.2.22.exe` before publishing the release.
 - [ ] After a failed update, check `%TEMP%\CamPlanUpdateDebug.log`, `%TEMP%\CamPlanUpdateLauncher.ps1`, and `%TEMP%\CamPlanUpdateError.log`.
 - [ ] Verify the downloaded installer path exists manually before the launcher runs.
+- [ ] Verify the launcher waits for `CamPlan.exe` to disappear by name, not by PID, before it starts the installer.
 - [ ] Verify the installer prompt no longer shows a "failed to close CamPlan" message after the app window closes.
 - [ ] Проверить, что после нажатия `+` у строки объекта создаётся дочерняя зона/этаж, а фокус переходит на план/canvas.
 - [ ] Проверить, что ручное переименование объекта и зоны через карандаш или double click остаётся редактируемым.

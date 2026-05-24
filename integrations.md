@@ -35,7 +35,7 @@
 - Update installation now downloads the latest GitHub release `.exe` asset directly and opens it from Electron main; `electron-updater` is no longer used for the download step.
 - The direct download path now normalizes the installer asset name with a fallback filename so incomplete release metadata cannot crash `path.join(...)`.
 - After the installer is downloaded, the renderer waits for user confirmation, then Electron main logs the absolute installer path to `%TEMP%\CamPlanUpdateDebug.log`, writes `%TEMP%\CamPlanUpdateLauncher.ps1`, and launches a hidden detached PowerShell helper so the app can quit cleanly before NSIS opens.
-- The hidden detached PowerShell helper waits for the Electron PID to exit and then starts the installer with no visible console window.
+- The hidden detached PowerShell helper waits briefly, then checks for `CamPlan.exe` by process name and starts the installer only after it disappears.
 - If PowerShell spawn fails, Electron main falls back to `shell.openPath` and then detached `cmd start`, logging which fallback path was used.
 - A custom `build/installer.nsh` override replaces the default app-running check with a no-op because the update flow already closes CamPlan before NSIS starts.
 - The PowerShell helper is spawned hidden during QA and the existing debug/error logs still capture missing-installer details if the file cannot be found.
