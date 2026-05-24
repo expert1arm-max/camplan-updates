@@ -1,7 +1,7 @@
 # Project Index
 
 ## Что это
-Desktop-приложение `CCTV Manager` для Windows на базе React/Vite/TanStack Router с Electron-оболочкой.
+Desktop-приложение `CamPlan` для Windows на базе React/Vite/TanStack Router с Electron-оболочкой.
 
 ## Текущий статус
 - MVP desktop-версии реализован и упаковывается.

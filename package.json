@@ -1,8 +1,8 @@
 {
   "name": "tanstack_start_ts",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "private": true,
-  "description": "Desktop CCTV manager for Windows.",
+  "description": "CamPlan desktop app for Windows.",
   "author": "Lovable",
   "sideEffects": false,
   "type": "module",
@@ -99,7 +99,7 @@
   },
   "build": {
     "appId": "com.camplan.cctvmanager",
-    "productName": "CCTV Manager",
+    "productName": "CamPlan",
     "directories": {
       "output": "release"
     },

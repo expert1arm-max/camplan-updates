@@ -120,7 +120,7 @@ async function createWindow() {
     minWidth: 1320,
     minHeight: 820,
     backgroundColor: "#0f172a",
-    title: "CCTV Manager",
+    title: "CamPlan",
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
@@ -203,7 +203,7 @@ async function fetchLatestGithubRelease() {
       signal: controller.signal,
       headers: {
         accept: "application/vnd.github+json",
-        "user-agent": "CCTV Manager",
+        "user-agent": "CamPlan",
         "x-github-api-version": "2022-11-28",
       },
     });
@@ -360,7 +360,7 @@ async function downloadReleaseAsset(asset, version) {
   const response = await fetch(downloadUrl, {
     headers: {
       accept: "application/octet-stream",
-      "user-agent": "CCTV Manager",
+      "user-agent": "CamPlan",
     },
   });
 

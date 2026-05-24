@@ -56,13 +56,13 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { httpEquiv: "Content-Security-Policy", content: csp },
-      { title: "CCTV Manager" },
+      { title: "CamPlan" },
       {
         name: "description",
         content: "Desktop-приложение для объектов, планов и камер видеонаблюдения.",
       },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "CCTV Manager" },
+      { property: "og:title", content: "CamPlan" },
       {
         property: "og:description",
         content: "Desktop-приложение для объектов, планов и камер видеонаблюдения.",

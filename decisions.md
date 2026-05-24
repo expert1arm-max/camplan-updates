@@ -13,3 +13,4 @@
 - The update button now bypasses `electron-updater` for the download step and instead downloads the latest GitHub release installer asset directly, which avoids the packaged cache-path crash on Windows.
 - The direct download flow now sanitizes the installer asset name and falls back to a synthesized filename so malformed release asset metadata cannot crash the update path.
 - The update installer is launched through a temporary scheduled task first so it starts outside the Electron child-process tree when NSIS asks to close the running application.
+- The visible product name is now `CamPlan`, while the Electron `appId` stays unchanged to avoid breaking the existing update channel for already installed builds.

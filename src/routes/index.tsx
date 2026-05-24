@@ -11,7 +11,7 @@ import { deviceTypeLabels, statusColors, statusLabels, useStore } from "@/data/s
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "CCTV Manager" },
+      { title: "CamPlan" },
       {
         name: "description",
         content: "Планы помещений и карточки устройств видеонаблюдения для объектов.",

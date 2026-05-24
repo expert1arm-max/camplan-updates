@@ -25,7 +25,7 @@ import {
 export const Route = createFileRoute("/cameras")({
   head: () => ({
     meta: [
-      { title: "Все устройства — CCTV Manager" },
+      { title: "Все устройства — CamPlan" },
       { name: "description", content: "Таблица всех устройств видеонаблюдения." },
     ],
   }),
