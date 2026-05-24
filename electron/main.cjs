@@ -324,7 +324,7 @@ function buildLauncherCmdContent(installerPath) {
   return [
     "@echo off",
     "setlocal",
-    "timeout /t 3 /nobreak >nul",
+    "timeout /t 5 /nobreak >nul",
     `if not exist "${installerPath}" (`,
     `  echo Installer not found: "${installerPath}" > "${updateErrorLogPath}"`,
     "  pause",
@@ -578,6 +578,10 @@ app.whenReady().then(() => {
       setImmediate(() => {
         logUpdateDebug("app.quit() scheduled after installer launch");
         app.quit();
+        setTimeout(() => {
+          logUpdateDebug("app.exit(0) fallback triggered after launcher start");
+          app.exit(0);
+        }, 1000);
       });
     } catch (error) {
       logUpdateError("installer launch failed:", error instanceof Error ? error.message : error);

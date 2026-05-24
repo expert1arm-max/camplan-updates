@@ -79,6 +79,7 @@
 - [ ] Verify the locally built `release\CamPlan Setup 0.2.15.exe` before publishing the release.
 - [ ] After a failed update, check `%TEMP%\CamPlanUpdateDebug.log` and `%TEMP%\CamPlanUpdateError.log`.
 - [ ] Verify the downloaded installer path exists manually before the launcher runs.
+- [ ] Verify the installer prompt no longer shows a "failed to close CCTV Manager" message after the app window closes.
 - [ ] Проверить, что после нажатия `+` у строки объекта создаётся дочерняя зона/этаж, а фокус переходит на план/canvas.
 - [ ] Проверить, что ручное переименование объекта и зоны через карандаш или double click остаётся редактируемым.
 - [ ] Проверить, что в поле переименования объекта/зоны работают обычный ввод, Backspace, Delete и вставка текста без дополнительного клика по экрану.

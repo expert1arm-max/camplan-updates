@@ -219,5 +219,5 @@
 - Removed modal `alert()` dialogs from project open/import flows so opening a file no longer shows a blocking system window; failures now go to the console.
 - File menu save/export actions are disabled until the project contains content, so empty projects stay passive for Save Project, JPG export, and CSV export.
 - Released `0.2.14` with the confirmation-first detached installer launcher and with the `CamPlan` product name.
-- Prepared `0.2.15` locally with a temp `.cmd` update launcher plus `%TEMP%` debug/error logs for update install debugging; the GitHub release has not been published yet.
+- Prepared `0.2.15` locally with a temp `.cmd` update launcher plus `%TEMP%` debug/error logs; the launcher now waits 5 seconds and has an `app.exit(0)` fallback after the installer helper starts. The GitHub release has not been published yet.
 - Wall endpoint rotation drag no longer cancels on canvas exit; the drag stays active when the cursor leaves and re-enters the field, and it ends on mouseup even if release happens outside the SVG.
