@@ -21,7 +21,7 @@
 ## Packaging
 - `npm run build` собирает frontend.
 - `npm run dist:win` собирает Windows installer.
-- Current packaged installer version is `0.2.15`.
+- Current packaged installer version is `0.2.16`.
 
 ## GitHub Releases
 - Release automation uses GitHub Actions.
@@ -36,4 +36,4 @@
 - The direct download path now normalizes the installer asset name with a fallback filename so incomplete release metadata cannot crash `path.join(...)`.
 - After the installer is downloaded, the renderer waits for user confirmation, then Electron main writes a temp `CamPlanUpdateLauncher.cmd`, logs the absolute installer path to `%TEMP%\CamPlanUpdateDebug.log`, and launches that batch file detached so the app can quit cleanly before NSIS opens.
 - The temp launcher waits 5 seconds before starting the installer and Electron main follows with an `app.exit(0)` fallback after the helper is spawned to avoid NSIS seeing the app as still running.
-- The temp launcher batch keeps a visible cmd window during QA and writes missing-installer details to `%TEMP%\CamPlanUpdateError.log` when the file cannot be found.
+- The temp launcher batch is now spawned hidden during QA and writes missing-installer details to `%TEMP%\CamPlanUpdateError.log` when the file cannot be found.

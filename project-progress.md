@@ -63,7 +63,7 @@
 - При старте приложение тихо проверяет latest release на GitHub и подсвечивает кнопку `О программе` зелёным, если доступна более новая версия.
 - Dev-запуск `dev:desktop` переведён на strict port `5173`, а Electron запускается с локальным `userData/sessionData` и `swiftshader` fallback, чтобы не уезжать на `5174` и не упираться в AppData/GPU cache issues.
 - Верхняя кнопка `Помощь` переименована в `О программе` и теперь сразу открывает окно обновления, без промежуточного выпадающего меню.
-- Версия приложения поднята до `0.2.15`; локальный Windows installer `release\CamPlan Setup 0.2.15.exe` собран для ручного теста update flow перед публикацией релиза.
+- Версия приложения поднята до `0.2.16`; локальный Windows installer `release\CamPlan Setup 0.2.16.exe` собран для ручного теста update flow перед публикацией релиза.
 - В верхней панели акцент режима редактирования перенесён с отдельного бейджа на кнопку `Завершить редактирование`, чтобы статус не дублировался в конце строки.
 - При завершении редактирования больше не показывается отдельная надпись `Изменения сохранены` в верхней строке, остаётся только текст на кнопке.
 - В верхней панели удалена строка `Автосохранение • время`, чтобы тулбар был чище и стабильнее по ширине.
@@ -219,5 +219,5 @@
 - Removed modal `alert()` dialogs from project open/import flows so opening a file no longer shows a blocking system window; failures now go to the console.
 - File menu save/export actions are disabled until the project contains content, so empty projects stay passive for Save Project, JPG export, and CSV export.
 - Released `0.2.14` with the confirmation-first detached installer launcher and with the `CamPlan` product name.
-- Prepared `0.2.15` locally with a temp `.cmd` update launcher plus `%TEMP%` debug/error logs; the launcher now waits 5 seconds and has an `app.exit(0)` fallback after the installer helper starts. The GitHub release has not been published yet.
+- Prepared `0.2.16` locally with a temp `.cmd` update launcher plus `%TEMP%` debug/error logs; the launcher now waits 5 seconds, starts hidden during QA, and has an `app.exit(0)` fallback after the installer helper starts. The GitHub release has not been published yet.
 - Wall endpoint rotation drag no longer cancels on canvas exit; the drag stays active when the cursor leaves and re-enters the field, and it ends on mouseup even if release happens outside the SVG.

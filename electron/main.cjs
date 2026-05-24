@@ -368,7 +368,7 @@ async function launchInstallerAfterExit(targetPath) {
   logUpdateDebug("launcher cmd content:", launcherContent);
 
   const result = await spawnDetachedProcess("cmd.exe", ["/c", updateLauncherPath], {
-    windowsHide: false,
+    windowsHide: true,
   });
   logUpdateDebug("launcher cmd spawn result:", `spawned pid=${result.pid ?? "unknown"}`);
 
