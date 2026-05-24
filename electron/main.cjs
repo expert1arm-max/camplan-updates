@@ -158,6 +158,18 @@ function sendUpdateEvent(payload) {
   mainWindow.webContents.send("app:update-event", payload);
 }
 
+function closeAllAppWindowsForUpdate() {
+  const windows = BrowserWindow.getAllWindows();
+  logUpdateDebug("closing app windows before update install:", String(windows.length));
+
+  for (const win of windows) {
+    if (!win.isDestroyed()) {
+      logUpdateDebug("destroying window before installer launch:", win.getTitle() || "<untitled>");
+      win.destroy();
+    }
+  }
+}
+
 let packageConfig;
 
 function getPackageConfig() {
@@ -571,6 +583,7 @@ app.whenReady().then(() => {
     logUpdateDebug("downloaded installer path:", installerPath);
 
     try {
+      closeAllAppWindowsForUpdate();
       const launchResult = await launchInstallerAfterExit(installerPath);
       logUpdateDebug("launch method completed:", launchResult.method);
       logUpdateDebug("launcher path launched:", launchResult.launcherPath);
