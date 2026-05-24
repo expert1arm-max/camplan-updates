@@ -603,6 +603,10 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
           <AlertDialogHeader>
             <AlertDialogTitle>Обновить программу</AlertDialogTitle>
             <AlertDialogDescription className="space-y-4">
+              <div className="space-y-1">
+                <div className="text-base font-semibold text-foreground">CamPlan</div>
+                <div className="text-sm text-muted-foreground">Информация о версии и обновлениях</div>
+              </div>
               <div className="space-y-2 rounded-md border bg-muted/30 p-3 text-sm">
                 <div className="flex items-center justify-between gap-4">
                   <span className="text-muted-foreground">Данная версия</span>

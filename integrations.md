@@ -21,7 +21,7 @@
 ## Packaging
 - `npm run build` собирает frontend.
 - `npm run dist:win` собирает Windows installer.
-- Current packaged installer version is `0.2.13`.
+- Current packaged installer version is `0.2.14`.
 
 ## GitHub Releases
 - Release automation uses GitHub Actions.
