@@ -5,7 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { Readable, Transform } = require("node:stream");
 const { pipeline } = require("node:stream/promises");
-const { createWriteStream, existsSync, appendFileSync } = require("node:fs");
+const { createWriteStream, existsSync, appendFileSync, writeFileSync } = require("node:fs");
 const { pathToFileURL } = require("node:url");
 const fs = require("fs/promises");
 
@@ -160,11 +160,11 @@ function sendUpdateEvent(payload) {
 
 function closeAllAppWindowsForUpdate() {
   const windows = BrowserWindow.getAllWindows();
-  logUpdateDebug("closing app windows before update install:", String(windows.length));
+  logUpdateDebug("closing app windows after launcher spawn:", String(windows.length));
 
   for (const win of windows) {
     if (!win.isDestroyed()) {
-      logUpdateDebug("destroying window before installer launch:", win.getTitle() || "<untitled>");
+      logUpdateDebug("destroying window before app exit:", win.getTitle() || "<untitled>");
       win.destroy();
     }
   }
@@ -434,10 +434,18 @@ async function launchInstallerAfterExit(targetPath) {
   const stats = await fs.stat(absoluteInstallerPath);
   logUpdateDebug("installer size bytes:", String(stats.size));
 
-  await fs.writeFile(updateLauncherScriptPath, launcherScript, "utf8");
-  logUpdateDebug("launcher script written:", updateLauncherScriptPath);
+  logUpdateDebug("before launcher script write:", updateLauncherScriptPath);
+  writeFileSync(updateLauncherScriptPath, launcherScript, "utf8");
+  logUpdateDebug("after launcher script write:", updateLauncherScriptPath);
+
+  if (!existsSync(updateLauncherScriptPath)) {
+    const message = `Не удалось создать launcher script: ${updateLauncherScriptPath}`;
+    logUpdateError(message);
+    throw new Error(message);
+  }
 
   try {
+    logUpdateDebug("before launcher spawn:", updateLauncherScriptPath);
     const result = await spawnDetachedProcess("powershell.exe", [
       "-NoProfile",
       "-ExecutionPolicy",
@@ -449,12 +457,16 @@ async function launchInstallerAfterExit(targetPath) {
     ], {
       windowsHide: true,
     });
-    logUpdateDebug("launcher spawn result:", `spawned pid=${result.pid ?? "unknown"}`);
+    logUpdateDebug("after launcher spawn:", `spawned pid=${result.pid ?? "unknown"}`);
+
+    closeAllAppWindowsForUpdate();
+    logUpdateDebug("before app.exit(0)");
 
     return {
       method: "powershell-hidden-script",
       path: absoluteInstallerPath,
       scriptPath: updateLauncherScriptPath,
+      spawnedPid: result.pid ?? null,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -475,6 +487,7 @@ async function launchInstallerAfterExit(targetPath) {
     logUpdateDebug("fallback launch method:", "detached-cmd-start");
 
     try {
+      logUpdateDebug("before fallback spawn:", absoluteInstallerPath);
       const result = await spawnDetachedProcess("cmd.exe", [
         "/c",
         "start",
@@ -483,11 +496,14 @@ async function launchInstallerAfterExit(targetPath) {
       ], {
         windowsHide: true,
       });
-      logUpdateDebug("fallback launch result:", `cmd spawned pid=${result.pid ?? "unknown"}`);
+      logUpdateDebug("after fallback spawn:", `cmd spawned pid=${result.pid ?? "unknown"}`);
+      closeAllAppWindowsForUpdate();
+      logUpdateDebug("before app.exit(0)");
       return {
         method: "detached-cmd-start",
         path: absoluteInstallerPath,
         scriptPath: updateLauncherScriptPath,
+        spawnedPid: result.pid ?? null,
       };
     } catch (fallbackError) {
       const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
@@ -689,10 +705,12 @@ app.whenReady().then(() => {
     logUpdateDebug("downloaded installer path:", installerPath);
 
     try {
-      closeAllAppWindowsForUpdate();
       const launchResult = await launchInstallerAfterExit(installerPath);
       logUpdateDebug("launch method completed:", launchResult.method);
       logUpdateDebug("launch script used:", launchResult.scriptPath);
+      if ("spawnedPid" in launchResult) {
+        logUpdateDebug("launch spawned pid:", String(launchResult.spawnedPid ?? "unknown"));
+      }
       pendingDownloadedInstaller = null;
       logUpdateDebug("app.exit(0) after installer launcher spawn");
       app.exit(0);
