@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld("cctvDesktop", {
   getLatestReleaseVersion: () => ipcRenderer.invoke("app:get-latest-release-version"),
   checkForUpdates: () => ipcRenderer.invoke("app:check-for-updates"),
   checkAndDownloadUpdate: () => ipcRenderer.invoke("app:check-and-download-update"),
+  launchDownloadedUpdate: () => ipcRenderer.invoke("app:launch-downloaded-update"),
   onUpdateEvent: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("app:update-event", listener);

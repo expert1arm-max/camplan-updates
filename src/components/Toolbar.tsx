@@ -90,6 +90,10 @@ declare global {
         message: string;
         version?: string;
       }>;
+      launchDownloadedUpdate: () => Promise<{
+        state: "launching" | "disabled" | "error";
+        message: string;
+      }>;
       onUpdateEvent: (callback: (event: UpdateEvent) => void) => () => void;
       openJsonFile: () => Promise<string | null>;
       openExternal: (url: string) => Promise<boolean>;
@@ -197,7 +201,9 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
   const [appVersion, setAppVersion] = useState("");
   const [githubVersion, setGithubVersion] = useState<string | null>(null);
   const [updateMessage, setUpdateMessage] = useState("");
-  const [updatePhase, setUpdatePhase] = useState<"idle" | "checking" | "downloading" | "done" | "error">("idle");
+  const [updatePhase, setUpdatePhase] = useState<
+    "idle" | "checking" | "downloading" | "ready" | "launching" | "done" | "error"
+  >("idle");
   const [updateProgress, setUpdateProgress] = useState<UpdateProgress | null>(null);
   const showIpLabels = settings.uiState?.showIpLabels ?? false;
   const hasProjectContent =
@@ -265,8 +271,9 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
           setUpdateMessage(event.message);
           break;
         case "downloaded":
-          setUpdatePhase("done");
+          setUpdatePhase("ready");
           setUpdateProgress(null);
+          setGithubVersion(event.version);
           setUpdateMessage(event.message);
           break;
         case "error":
@@ -424,6 +431,11 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
   };
 
   const handleUpdateOpen = async () => {
+    if (updatePhase === "ready" || updatePhase === "launching") {
+      setUpdateOpen(true);
+      return;
+    }
+
     setUpdateOpen(true);
     setUpdatePhase("checking");
     setUpdateProgress(null);
@@ -460,7 +472,28 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
 
   const handleUpdateInstall = async () => {
     const bridge = window.cctvDesktop;
-    if (!bridge || !updateAvailable) {
+    if (!bridge) {
+      return;
+    }
+
+    if (updatePhase === "ready") {
+      setUpdatePhase("launching");
+      setUpdateMessage("Программа закрывается и запускает установщик.");
+
+      const result = await bridge.launchDownloadedUpdate();
+
+      if (result.state === "error" || result.state === "disabled") {
+        setUpdatePhase("error");
+        setUpdateProgress(null);
+        setUpdateMessage(result.message);
+        return;
+      }
+
+      setUpdateMessage(result.message);
+      return;
+    }
+
+    if (!updateAvailable) {
       return;
     }
 
@@ -480,7 +513,7 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
 
     if (result.state === "downloaded") {
       setGithubVersion(result.version ?? githubVersion);
-      setUpdatePhase("done");
+      setUpdatePhase("ready");
       setUpdateProgress(null);
       setUpdateMessage(result.message);
       return;
@@ -560,7 +593,7 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
 
           setUpdateOpen(open);
 
-          if (!open) {
+          if (!open && updatePhase !== "ready" && updatePhase !== "launching") {
             setUpdatePhase("idle");
             setUpdateProgress(null);
           }
@@ -600,8 +633,20 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setUpdateOpen(false)}>Закрыть</AlertDialogCancel>
-            <Button onClick={handleUpdateInstall} disabled={!updateAvailable || updatePhase === "checking" || updatePhase === "downloading"}>
-              Обновить
+            <Button
+              onClick={handleUpdateInstall}
+              disabled={
+                updatePhase === "checking" ||
+                updatePhase === "downloading" ||
+                updatePhase === "launching" ||
+                (!updateAvailable && updatePhase !== "ready")
+              }
+            >
+              {updatePhase === "ready"
+                ? "Закрыть и установить"
+                : updatePhase === "launching"
+                  ? "Запускаем..."
+                  : "Обновить"}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

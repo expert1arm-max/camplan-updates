@@ -63,7 +63,7 @@
 - При старте приложение тихо проверяет latest release на GitHub и подсвечивает кнопку `О программе` зелёным, если доступна более новая версия.
 - Dev-запуск `dev:desktop` переведён на strict port `5173`, а Electron запускается с локальным `userData/sessionData` и `swiftshader` fallback, чтобы не уезжать на `5174` и не упираться в AppData/GPU cache issues.
 - Верхняя кнопка `Помощь` переименована в `О программе` и теперь сразу открывает окно обновления, без промежуточного выпадающего меню.
-- Версия приложения поднята до `0.2.12`; локальный Windows installer `release\CamPlan Setup 0.2.12.exe` собран, а тег `v0.2.12` отправлен в GitHub для публикации релиза через Actions.
+- Версия приложения поднята до `0.2.13`; локальный Windows installer `release\CamPlan Setup 0.2.13.exe` собран, а тег `v0.2.13` отправлен в GitHub для публикации релиза через Actions.
 - В верхней панели акцент режима редактирования перенесён с отдельного бейджа на кнопку `Завершить редактирование`, чтобы статус не дублировался в конце строки.
 - При завершении редактирования больше не показывается отдельная надпись `Изменения сохранены` в верхней строке, остаётся только текст на кнопке.
 - В верхней панели удалена строка `Автосохранение • время`, чтобы тулбар был чище и стабильнее по ширине.
@@ -215,8 +215,8 @@
 - Fixed runtime update lookup so packaged builds can still resolve the GitHub releases repo even when the shipped `package.json` does not include `build.publish`.
 - Replaced the packaged update download path with a direct GitHub release asset download/open flow so the update button no longer depends on `electron-updater` cache path internals and avoids the `path` undefined crash.
 - Hardened the direct update download path so missing release asset metadata falls back to a synthesized installer filename instead of crashing on `path.join(...)`.
-- The direct update installer now launches through a temporary scheduled task first, so closing the app during installation does not terminate the installer itself.
+- The direct update installer now waits for an explicit confirmation after download, then starts from a detached delayed helper only after the app is quitting.
 - Removed modal `alert()` dialogs from project open/import flows so opening a file no longer shows a blocking system window; failures now go to the console.
 - File menu save/export actions are disabled until the project contains content, so empty projects stay passive for Save Project, JPG export, and CSV export.
-- Released `0.2.12` with the scheduled-task installer launcher to keep the update process alive when NSIS closes the app and with the `CamPlan` product name.
+- Released `0.2.13` with the confirmation-first detached installer launcher and with the `CamPlan` product name.
 - Wall endpoint rotation drag no longer cancels on canvas exit; the drag stays active when the cursor leaves and re-enters the field, and it ends on mouseup even if release happens outside the SVG.

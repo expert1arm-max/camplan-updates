@@ -17,6 +17,7 @@ const githubReleaseRepoFallback = {
 };
 let server;
 let mainWindow;
+let pendingDownloadedInstaller = null;
 
 app.commandLine.appendSwitch("disable-gpu");
 app.commandLine.appendSwitch("disable-gpu-compositing");
@@ -280,72 +281,41 @@ function spawnDetachedProcess(executable, args) {
 
     child.once("spawn", () => {
       child.unref();
+      resolve();
     });
     child.once("error", reject);
-    child.once("close", (code, signal) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-
-      reject(new Error(`Команда ${path.basename(executable)} завершилась с кодом ${code ?? signal ?? "unknown"}.`));
-    });
   });
 }
 
-function formatTaskTime(date) {
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${hours}:${minutes}`;
+function getSystemPowerShellPath() {
+  const systemRoot = process.env.SystemRoot || "C:\\Windows";
+  return path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
 }
 
-async function launchInstallerViaScheduledTask(targetPath) {
-  const taskName = `CamplanUpdate-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const startTime = new Date(Date.now() + 2 * 60 * 1000);
-  const taskCommand = `"${String(targetPath).replace(/"/g, '""')}"`;
-  const schtasksPath = getSystemExecutablePath("schtasks.exe");
+function escapePowerShellSingleQuoted(value) {
+  return String(value).replace(/'/g, "''");
+}
 
-  await spawnDetachedProcess(schtasksPath, [
-    "/Create",
-    "/F",
-    "/SC",
-    "ONCE",
-    "/ST",
-    formatTaskTime(startTime),
-    "/TN",
-    taskName,
-    "/TR",
-    taskCommand,
+async function launchInstallerAfterExit(targetPath, delaySeconds = 3) {
+  const installerLiteral = `'${escapePowerShellSingleQuoted(targetPath)}'`;
+  const script = `Start-Sleep -Seconds ${delaySeconds}; Start-Process -LiteralPath ${installerLiteral}`;
+  const encodedCommand = Buffer.from(script, "utf16le").toString("base64");
+  const powershellPath = getSystemPowerShellPath();
+
+  await spawnDetachedProcess(powershellPath, [
+    "-NoProfile",
+    "-WindowStyle",
+    "Hidden",
+    "-EncodedCommand",
+    encodedCommand,
   ]);
-
-  const runPromise = spawnDetachedProcess(schtasksPath, ["/Run", "/TN", taskName]);
-
-  setTimeout(() => {
-    void spawnDetachedProcess(schtasksPath, ["/Delete", "/F", "/TN", taskName]).catch(() => {});
-  }, 15000);
-
-  return runPromise;
-}
-
-async function launchInstallerDetached(targetPath) {
-  try {
-    await launchInstallerViaScheduledTask(targetPath);
-    return;
-  } catch {
-    // Fall back to direct shell launch when Task Scheduler is unavailable.
-  }
-
-  const openError = await shell.openPath(targetPath);
-  if (openError) {
-    throw new Error(`Не удалось запустить installer: ${openError}`);
-  }
 }
 
 async function downloadReleaseAsset(asset, version) {
   const downloadsDir = path.join(app.getPath("userData"), "updates");
   await fs.mkdir(downloadsDir, { recursive: true });
 
-  const assetName = String(asset?.name || `CCTV-Manager-Setup-${version}.exe`).trim();
+  const assetName = String(asset?.name || `CamPlan Setup ${version}.exe`).trim();
   const downloadUrl = String(asset?.browserDownloadUrl || "").trim();
 
   if (!assetName) {
@@ -391,8 +361,6 @@ async function downloadReleaseAsset(asset, version) {
   });
 
   await pipeline(Readable.fromWeb(response.body), progressStream, createWriteStream(targetPath));
-
-  await launchInstallerDetached(targetPath);
 
   return {
     path: targetPath,
@@ -478,8 +446,12 @@ app.whenReady().then(() => {
       });
 
       const downloaded = await downloadReleaseAsset(installerAsset, updateVersion);
+      pendingDownloadedInstaller = {
+        ...downloaded,
+        launchScheduled: false,
+      };
 
-      const message = `Обновление ${updateVersion} скачано и запущено из ${downloaded.path}.`;
+      const message = "Обновление скачано. Программа сейчас закроется и запустит установщик.";
       sendUpdateEvent({
         type: "downloaded",
         version: updateVersion,
@@ -499,6 +471,52 @@ app.whenReady().then(() => {
         message,
       };
     }
+  });
+
+  ipcMain.handle("app:launch-downloaded-update", async () => {
+    if (!app.isPackaged) {
+      return {
+        state: "disabled",
+        message: "Запуск установщика доступен в собранной версии приложения.",
+      };
+    }
+
+    if (!pendingDownloadedInstaller?.path) {
+      return {
+        state: "error",
+        message: "Установщик для запуска не подготовлен.",
+      };
+    }
+
+    if (pendingDownloadedInstaller.launchScheduled) {
+      return {
+        state: "error",
+        message: "Установщик уже готовится к запуску.",
+      };
+    }
+
+    pendingDownloadedInstaller.launchScheduled = true;
+    const installerPath = pendingDownloadedInstaller.path;
+
+    try {
+      await launchInstallerAfterExit(installerPath, 3);
+      pendingDownloadedInstaller = null;
+      setImmediate(() => {
+        app.quit();
+      });
+    } catch (error) {
+      pendingDownloadedInstaller.launchScheduled = false;
+      const message = error instanceof Error ? error.message : "Не удалось запустить installer.";
+      return {
+        state: "error",
+        message,
+      };
+    }
+
+    return {
+      state: "launching",
+      message: "Программа закрывается и запускает установщик.",
+    };
   });
 
   ipcMain.handle("dialog:open-json", async () => {

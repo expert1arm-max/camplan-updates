@@ -21,7 +21,7 @@
 ## Packaging
 - `npm run build` собирает frontend.
 - `npm run dist:win` собирает Windows installer.
-- Current packaged installer version is `0.2.12`.
+- Current packaged installer version is `0.2.13`.
 
 ## GitHub Releases
 - Release automation uses GitHub Actions.
@@ -34,4 +34,4 @@
 - Packaged builds also use a runtime fallback repo in `electron/main.cjs`, so the app can still find the release repository even if `build.publish` is not present in the shipped `package.json`.
 - Update installation now downloads the latest GitHub release `.exe` asset directly and opens it from Electron main; `electron-updater` is no longer used for the download step.
 - The direct download path now normalizes the installer asset name with a fallback filename so incomplete release metadata cannot crash `path.join(...)`.
-- The downloaded installer is launched through a temporary scheduled task first so quitting the app does not terminate the installer midway through setup.
+- After the installer is downloaded, the renderer waits for user confirmation, then Electron main starts it from a detached delayed helper so the app can quit cleanly before NSIS opens.
