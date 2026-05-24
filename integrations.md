@@ -21,7 +21,7 @@
 ## Packaging
 - `npm run build` собирает frontend.
 - `npm run dist:win` собирает Windows installer.
-- Current packaged installer version is `0.2.20`.
+- Current packaged installer version is `0.2.21`.
 
 ## GitHub Releases
 - Release automation uses GitHub Actions.
@@ -35,6 +35,6 @@
 - Update installation now downloads the latest GitHub release `.exe` asset directly and opens it from Electron main; `electron-updater` is no longer used for the download step.
 - The direct download path now normalizes the installer asset name with a fallback filename so incomplete release metadata cannot crash `path.join(...)`.
 - After the installer is downloaded, the renderer waits for user confirmation, then Electron main logs the absolute installer path to `%TEMP%\CamPlanUpdateDebug.log` and launches a hidden detached PowerShell helper so the app can quit cleanly before NSIS opens.
-- The hidden detached PowerShell helper waits 2 seconds and starts the installer with no visible console window.
+- The hidden detached PowerShell helper waits for the Electron PID to exit and then starts the installer with no visible console window.
 - A custom `build/installer.nsh` override replaces the default app-running check with a no-op because the update flow already closes CamPlan before NSIS starts.
 - The PowerShell helper is spawned hidden during QA and the existing debug/error logs still capture missing-installer details if the file cannot be found.

@@ -335,17 +335,19 @@ function escapePowerShellSingleQuotedString(value) {
   return String(value).replace(/'/g, "''");
 }
 
-async function launchInstallerAfterExit(targetPath) {
+async function launchInstallerAfterExit(targetPath, parentPid = process.pid) {
   const absoluteInstallerPath = normalizeAbsolutePath(targetPath);
   const absoluteCheck = path.isAbsolute(absoluteInstallerPath);
   const exists = existsSync(absoluteInstallerPath);
   const installerDir = path.dirname(absoluteInstallerPath);
   const escapedInstallerPath = escapePowerShellSingleQuotedString(absoluteInstallerPath);
   const escapedInstallerDir = escapePowerShellSingleQuotedString(installerDir);
-  const powershellCommand = `Start-Sleep -Seconds 2; Start-Process -FilePath '${escapedInstallerPath}' -WorkingDirectory '${escapedInstallerDir}'`;
+  const launchParentPid = Number(parentPid || process.pid);
+  const powershellCommand = `while (Get-Process -Id ${launchParentPid} -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 200 }; Start-Process -FilePath '${escapedInstallerPath}' -WorkingDirectory '${escapedInstallerDir}'`;
 
   logUpdateDebug("downloaded installer path:", absoluteInstallerPath);
   logUpdateDebug("selected launch method:", "powershell-hidden-detached");
+  logUpdateDebug("waiting for app pid:", String(launchParentPid));
   logUpdateDebug("path.isAbsolute:", String(absoluteCheck));
   logUpdateDebug("fs.existsSync:", String(exists));
   logUpdateDebug("powershell command:", powershellCommand);
@@ -367,6 +369,8 @@ async function launchInstallerAfterExit(targetPath) {
 
   const result = await spawnDetachedProcess("powershell.exe", [
     "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
     "-WindowStyle",
     "Hidden",
     "-Command",
@@ -576,7 +580,7 @@ app.whenReady().then(() => {
 
     try {
       closeAllAppWindowsForUpdate();
-      const launchResult = await launchInstallerAfterExit(installerPath);
+      const launchResult = await launchInstallerAfterExit(installerPath, process.pid);
       logUpdateDebug("launch method completed:", launchResult.method);
       logUpdateDebug("launch command used:", launchResult.command);
       pendingDownloadedInstaller = null;
