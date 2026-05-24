@@ -18,6 +18,7 @@ const githubReleaseRepoFallback = {
 let server;
 let mainWindow;
 let pendingDownloadedInstaller = null;
+const updateInstallLogPrefix = "[update-install]";
 
 app.commandLine.appendSwitch("disable-gpu");
 app.commandLine.appendSwitch("disable-gpu-compositing");
@@ -266,49 +267,90 @@ function pickInstallerAsset(release) {
   return exeAsset || null;
 }
 
+function logUpdateInstall(...parts) {
+  console.log(updateInstallLogPrefix, ...parts);
+}
+
+function logUpdateInstallError(...parts) {
+  console.error(updateInstallLogPrefix, ...parts);
+}
+
 function getSystemExecutablePath(executableName) {
   const systemRoot = process.env.SystemRoot || "C:\\Windows";
   return path.join(systemRoot, "System32", executableName);
 }
 
-function spawnDetachedProcess(executable, args) {
+function spawnDetachedProcess(executable, args, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, {
       detached: true,
       stdio: "ignore",
-      windowsHide: true,
+      windowsHide: options.windowsHide ?? true,
     });
 
     child.once("spawn", () => {
       child.unref();
-      resolve();
+      resolve({ pid: child.pid ?? null });
     });
     child.once("error", reject);
   });
 }
 
-function getSystemPowerShellPath() {
-  const systemRoot = process.env.SystemRoot || "C:\\Windows";
-  return path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+function normalizeAbsolutePath(targetPath) {
+  const inputPath = String(targetPath || "").trim();
+  if (!inputPath) {
+    throw new Error("Путь к установщику не задан.");
+  }
+
+  const resolvedPath = path.resolve(inputPath);
+  return path.isAbsolute(resolvedPath) ? resolvedPath : path.resolve(resolvedPath);
 }
 
-function escapePowerShellSingleQuoted(value) {
-  return String(value).replace(/'/g, "''");
+function buildDelayedLaunchCommand(installerPath, delaySeconds) {
+  const safeDelaySeconds = Number.isFinite(delaySeconds) && delaySeconds > 0 ? Math.floor(delaySeconds) : 3;
+  return `timeout /t ${safeDelaySeconds} /nobreak >nul & start "" "${installerPath}"`;
 }
 
 async function launchInstallerAfterExit(targetPath, delaySeconds = 3) {
-  const installerLiteral = `'${escapePowerShellSingleQuoted(targetPath)}'`;
-  const script = `Start-Sleep -Seconds ${delaySeconds}; Start-Process -LiteralPath ${installerLiteral}`;
-  const encodedCommand = Buffer.from(script, "utf16le").toString("base64");
-  const powershellPath = getSystemPowerShellPath();
+  const absoluteInstallerPath = normalizeAbsolutePath(targetPath);
+  const command = buildDelayedLaunchCommand(absoluteInstallerPath, delaySeconds);
 
-  await spawnDetachedProcess(powershellPath, [
-    "-NoProfile",
-    "-WindowStyle",
-    "Hidden",
-    "-EncodedCommand",
-    encodedCommand,
-  ]);
+  logUpdateInstall("selected launch method:", "detached-cmd-timeout");
+  logUpdateInstall("installer path:", absoluteInstallerPath);
+  logUpdateInstall("cmd command:", command);
+
+  try {
+    await fs.access(absoluteInstallerPath);
+    logUpdateInstall("file exists before launch:", true);
+  } catch (error) {
+    logUpdateInstall("file exists before launch:", false);
+    throw new Error(`Установщик не найден перед запуском: ${absoluteInstallerPath}`);
+  }
+
+  const stats = await fs.stat(absoluteInstallerPath);
+  logUpdateInstall("installer size bytes:", stats.size);
+
+  try {
+    const result = await spawnDetachedProcess("cmd.exe", ["/c", command], {
+      windowsHide: true,
+    });
+    logUpdateInstall("scheduled task command result:", "not used");
+    logUpdateInstall("cmd helper spawn result:", `spawned pid=${result.pid ?? "unknown"}`);
+    return {
+      method: "cmd",
+      path: absoluteInstallerPath,
+    };
+  } catch (error) {
+    logUpdateInstallError("cmd helper failed, using fallback process spawn:", error instanceof Error ? error.message : error);
+    const fallbackResult = await spawnDetachedProcess(absoluteInstallerPath, [], {
+      windowsHide: false,
+    });
+    logUpdateInstall("fallback process spawn result:", `spawned pid=${fallbackResult.pid ?? "unknown"}`);
+    return {
+      method: "spawn",
+      path: absoluteInstallerPath,
+    };
+  }
 }
 
 async function downloadReleaseAsset(asset, version) {
@@ -363,7 +405,7 @@ async function downloadReleaseAsset(asset, version) {
   await pipeline(Readable.fromWeb(response.body), progressStream, createWriteStream(targetPath));
 
   return {
-    path: targetPath,
+    path: path.resolve(targetPath),
     version,
   };
 }
@@ -496,15 +538,20 @@ app.whenReady().then(() => {
     }
 
     pendingDownloadedInstaller.launchScheduled = true;
-    const installerPath = pendingDownloadedInstaller.path;
+    const installerPath = normalizeAbsolutePath(pendingDownloadedInstaller.path);
+    logUpdateInstall("launch requested");
+    logUpdateInstall("downloaded installer path:", installerPath);
 
     try {
-      await launchInstallerAfterExit(installerPath, 3);
+      const launchResult = await launchInstallerAfterExit(installerPath, 3);
+      logUpdateInstall("launch method completed:", launchResult.method);
       pendingDownloadedInstaller = null;
       setImmediate(() => {
+        logUpdateInstall("app.quit() scheduled after installer launch");
         app.quit();
       });
     } catch (error) {
+      logUpdateInstallError("installer launch failed:", error instanceof Error ? error.message : error);
       pendingDownloadedInstaller.launchScheduled = false;
       const message = error instanceof Error ? error.message : "Не удалось запустить installer.";
       return {

@@ -12,5 +12,5 @@
 - Runtime release lookup in `electron/main.cjs` must not depend only on `build.publish` being present in the packaged `package.json`; it now accepts env overrides and falls back to the fixed GitHub releases repo so the update check still works in packaged builds.
 - The update button now bypasses `electron-updater` for the download step and instead downloads the latest GitHub release installer asset directly, which avoids the packaged cache-path crash on Windows.
 - The direct download flow now sanitizes the installer asset name and falls back to a synthesized filename so malformed release asset metadata cannot crash the update path.
-- The manual update flow now requires an explicit confirmation step after download; only then does Electron main start the installer from a detached delayed helper and quit the app cleanly first.
+- The manual update flow now requires an explicit confirmation step after download; only then does Electron main start the installer from a detached `cmd.exe /c timeout /t 3 /nobreak >nul & start "" "<installerPath>"` helper and quit the app cleanly first, with a detached direct-spawn fallback if that helper fails.
 - The visible product name is now `CamPlan`, while the Electron `appId` stays unchanged to avoid breaking the existing update channel for already installed builds.
