@@ -383,7 +383,7 @@ async function downloadReleaseAsset(asset, version) {
   const downloadsDir = path.join(app.getPath("userData"), "updates");
   await fs.mkdir(downloadsDir, { recursive: true });
 
-  const assetName = String(asset?.name || `CamPlan Setup ${version}.exe`).trim();
+  const assetName = String(asset?.name || `CamPlan-Installer-${version}.exe`).trim();
   const downloadUrl = String(asset?.browserDownloadUrl || "").trim();
 
   if (!assetName) {

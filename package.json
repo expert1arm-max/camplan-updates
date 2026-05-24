@@ -1,6 +1,6 @@
 {
   "name": "tanstack_start_ts",
-  "version": "0.2.17",
+  "version": "0.2.18",
   "private": true,
   "description": "CamPlan desktop app for Windows.",
   "author": "Lovable",
@@ -100,7 +100,8 @@
   "build": {
     "appId": "com.camplan.cctvmanager",
     "productName": "CamPlan",
-    "artifactName": "CamPlan Setup ${version}.${ext}",
+    "artifactName": "CamPlan-Installer-${version}.${ext}",
+    "executableName": "CamPlan",
     "directories": {
       "output": "release"
     },
@@ -114,10 +115,15 @@
     },
     "asar": true,
     "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
       "shortcutName": "CamPlan",
-      "uninstallDisplayName": "CamPlan"
+      "uninstallDisplayName": "CamPlan",
+      "deleteAppDataOnUninstall": false
     },
     "win": {
+      "executableName": "CamPlan",
       "target": [
         "nsis"
       ]
