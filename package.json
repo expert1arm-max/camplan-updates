@@ -1,6 +1,6 @@
 {
   "name": "tanstack_start_ts",
-  "version": "0.2.29",
+  "version": "0.2.30",
   "private": true,
   "description": "CamPlan desktop app for Windows.",
   "author": "Lovable",
@@ -120,7 +120,8 @@
       "allowToChangeInstallationDirectory": true,
       "shortcutName": "CamPlan",
       "uninstallDisplayName": "CamPlan",
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "include": "build/installer.nsh"
     },
     "win": {
       "executableName": "CamPlan",

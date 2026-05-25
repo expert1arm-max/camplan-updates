@@ -21,4 +21,5 @@
 - The coordinate fix is intentionally centralized in `PlanCanvas` helper conversion functions so walls, rooms, and any other pointer-driven SVG interactions stay aligned under the cursor across zoom, scaling, and letterboxing.
 - The last opened project is now flushed again on `beforeunload`/`pagehide` so a quick app close does not lose the most recent persisted snapshot before the next startup restore.
 - NSIS running-app close/retry prompts are disabled by overriding `customCheckAppRunning` to a no-op in `build/installer.nsh`; the update launcher already closes CamPlan before starting the installer, so the installer must not try to kill or retry the app itself.
+- The visible `Не удалось закрыть CamPlan` prompt was actually coming from the stock `installUtil.nsh` old-version uninstall loop, so the repo now carries a local `build/installUtil.nsh` override that removes the retry dialog entirely.
 - Imported projects are now persisted immediately to both IndexedDB and the `localStorage` backup, and startup restore prefers the freshest non-empty snapshot so a blank startup state cannot overwrite the last opened project.
