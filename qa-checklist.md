@@ -6,7 +6,7 @@
 - [x] `npm run dist:win`
 
 ## Electron startup
-- [ ] Запустить свежий Windows installer `release\CamPlan-Installer-0.2.25.exe`.
+- [ ] Запустить свежий Windows installer `release\CamPlan-Installer-0.2.26.exe`.
 - [ ] Проверить, что UI открывается со стилями и без black screen.
 - [ ] Проверить, что приложение стартует в режиме `Просмотр`.
 - [ ] Переключиться в `Редактирование` и обратно.
@@ -77,8 +77,8 @@
 - [ ] Verify NSIS does not ask to close CCTV Manager during the confirmed update flow.
 - [ ] Verify the installation completes after the app quits and the detached installer starts.
 - [ ] Verify the custom NSIS check override does not prompt to close CamPlan when only the installer is running.
-- [ ] Verify the locally built `release\CamPlan-Installer-0.2.25.exe` before publishing the release.
-- [ ] After a failed update, check `%TEMP%\CamPlanUpdateDebug.log`, `%TEMP%\CamPlanUpdateLauncher.ps1`, and `%TEMP%\CamPlanUpdateError.log`.
+- [ ] Verify the locally built `release\CamPlan-Installer-0.2.26.exe` before publishing the release.
+- [ ] After a failed update, check `%TEMP%\CamPlanUpdateDebug.log`, `%TEMP%\CamPlanUpdateLauncher.cmd`, `%TEMP%\CamPlanUpdateLauncher.vbs`, and `%TEMP%\CamPlanUpdateError.log`.
 - [ ] Verify the downloaded installer path exists manually before the launcher runs.
 - [ ] Verify the launcher waits for `CamPlan.exe` to disappear by name, not by PID, before it starts the installer.
 - [ ] Verify the installer prompt no longer shows a "failed to close CamPlan" message after the app window closes.

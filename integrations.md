@@ -21,7 +21,7 @@
 ## Packaging
 - `npm run build` собирает frontend.
 - `npm run dist:win` собирает Windows installer.
-- Current packaged installer version is `0.2.25`.
+- Current packaged installer version is `0.2.26`.
 
 ## GitHub Releases
 - Release automation uses GitHub Actions.
@@ -34,10 +34,10 @@
 - Packaged builds also use a runtime fallback repo in `electron/main.cjs`, so the app can still find the release repository even if `build.publish` is not present in the shipped `package.json`.
 - Update installation now downloads the latest GitHub release `.exe` asset directly and opens it from Electron main; `electron-updater` is no longer used for the download step.
 - The direct download path now normalizes the installer asset name with a fallback filename so incomplete release metadata cannot crash `path.join(...)`.
-- After the installer is downloaded, the renderer waits for user confirmation, then Electron main logs the absolute installer path to `%TEMP%\CamPlanUpdateDebug.log`, writes `%TEMP%\CamPlanUpdateLauncher.ps1`, and launches a hidden detached PowerShell helper so the app can quit cleanly before NSIS opens.
-- The hidden detached PowerShell helper waits briefly, then checks for `CamPlan.exe` by process name and starts the installer only after it disappears.
-- If PowerShell spawn fails, Electron main falls back to `shell.openPath` and then detached `cmd start`, logging which fallback path was used.
+- After the installer is downloaded, the renderer waits for user confirmation, then Electron main logs the absolute installer path to `%TEMP%\CamPlanUpdateDebug.log`, writes `%TEMP%\CamPlanUpdateLauncher.cmd` and `%TEMP%\CamPlanUpdateLauncher.vbs`, and launches a hidden detached WScript helper so the app can quit cleanly before NSIS opens.
+- The hidden launcher waits briefly, then checks for `CamPlan.exe` by process name and starts the installer only after it disappears.
+- The update launcher no longer uses PowerShell or fallback launch paths; the hidden WScript + CMD pair is the only launch path.
 - A custom `build/installer.nsh` override replaces the default app-running check with a no-op because the update flow already closes CamPlan before NSIS starts.
-- The current electron-builder schema does not accept a `closeRunningApp` NSIS option, so the no-op `build/installer.nsh` remains the actual guard that prevents the installer from trying to close CamPlan again. The launcher generation now fails fast if `parentPid` or `Get-Process -Id` ever appear in the generated PowerShell script.
-- The update launcher script is written with `fs.writeFileSync` before any window teardown, and the PowerShell spawn is only attempted after that file exists on disk; the app closes only after the launcher is successfully spawned.
-- The PowerShell helper is spawned hidden during QA and the existing debug/error logs still capture missing-installer details if the file cannot be found.
+- The current electron-builder schema does not accept a `closeRunningApp` NSIS option, so the no-op `build/installer.nsh` remains the actual guard that prevents the installer from trying to close CamPlan again.
+- The update launcher scripts are written with `fs.writeFileSync` before any window teardown, and the WScript spawn is only attempted after both files exist on disk; the app closes only after the launcher is successfully spawned.
+- The hidden WScript helper is spawned during QA and the existing debug/error logs still capture missing-installer details if the file cannot be found.

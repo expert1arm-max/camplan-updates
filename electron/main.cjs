@@ -18,7 +18,8 @@ const githubReleaseRepoFallback = {
 };
 const updateDebugLogPath = path.join(os.tmpdir(), "CamPlanUpdateDebug.log");
 const updateErrorLogPath = path.join(os.tmpdir(), "CamPlanUpdateError.log");
-const updateLauncherScriptPath = path.join(os.tmpdir(), "CamPlanUpdateLauncher.ps1");
+const updateLauncherCmdPath = path.join(os.tmpdir(), "CamPlanUpdateLauncher.cmd");
+const updateLauncherVbsPath = path.join(os.tmpdir(), "CamPlanUpdateLauncher.vbs");
 let server;
 let mainWindow;
 let pendingDownloadedInstaller = null;
@@ -332,89 +333,77 @@ function normalizeAbsolutePath(targetPath) {
   return path.isAbsolute(resolvedPath) ? resolvedPath : path.resolve(resolvedPath);
 }
 
-function escapePowerShellSingleQuotedString(value) {
-  return String(value).replace(/'/g, "''");
+function escapeCmdArgument(value) {
+  return String(value)
+    .replace(/%/g, "%%")
+    .replace(/"/g, '""');
 }
 
-function buildPowerShellUpdateLauncherScript({
+function buildCmdUpdateLauncherScript({
   installerPath,
   debugLogPath = updateDebugLogPath,
   errorLogPath = updateErrorLogPath,
 }) {
-  const escapedInstallerPath = escapePowerShellSingleQuotedString(installerPath);
-  const escapedInstallerDir = escapePowerShellSingleQuotedString(path.dirname(installerPath));
-  const escapedDebugLogPath = escapePowerShellSingleQuotedString(debugLogPath);
-  const escapedErrorLogPath = escapePowerShellSingleQuotedString(errorLogPath);
+  const escapedInstallerPath = escapeCmdArgument(installerPath);
+  const escapedDebugLogPath = escapeCmdArgument(debugLogPath);
+  const escapedErrorLogPath = escapeCmdArgument(errorLogPath);
 
   return [
-    "$ErrorActionPreference = 'Stop'",
-    `$debugLogPath = '${escapedDebugLogPath}'`,
-    `$errorLogPath = '${escapedErrorLogPath}'`,
-    `$installerPath = '${escapedInstallerPath}'`,
-    `$installerDir = '${escapedInstallerDir}'`,
-    "function Write-LauncherLog {",
-    "  param([string]$Message)",
-    "  Add-Content -LiteralPath $debugLogPath -Value ((Get-Date -Format o) + ' ' + $Message)",
-    "}",
-    "function Write-LauncherError {",
-    "  param([string]$Message)",
-    "  Add-Content -LiteralPath $errorLogPath -Value ((Get-Date -Format o) + ' ' + $Message)",
-    "}",
-    "try {",
-    "  Write-LauncherLog ('launcher start time: ' + (Get-Date -Format o))",
-    "  Write-LauncherLog ('script path: ' + $PSCommandPath)",
-    "  Write-LauncherLog ('target installer path: ' + $installerPath)",
-    "  Write-LauncherLog ('installer dir: ' + $installerDir)",
-    "  Start-Sleep -Milliseconds 1500",
-    "  $maxWait = 20",
-    "  $count = 0",
-    "  $running = Get-Process CamPlan -ErrorAction SilentlyContinue",
-    "  Write-LauncherLog ('initial CamPlan.exe running: ' + [bool]$running)",
-    "  while ($count -lt $maxWait) {",
-    "    $running = Get-Process CamPlan -ErrorAction SilentlyContinue",
-    "    if (-not $running) {",
-    "      break",
-    "    }",
-    "    Write-LauncherLog ('CamPlan.exe still running, retry: ' + $count)",
-    "    Start-Sleep -Milliseconds 500",
-    "    $count++",
-    "  }",
-    "  Write-LauncherLog ('CamPlan.exe final running state: ' + [bool](Get-Process CamPlan -ErrorAction SilentlyContinue))",
-    "  Write-LauncherLog ('retry count: ' + $count)",
-    "  if (-not (Test-Path -LiteralPath $installerPath)) {",
-    "    throw ('Installer not found: ' + $installerPath)",
-    "  }",
-    "  Write-LauncherLog 'installer file exists'",
-    "  Start-Process -FilePath $installerPath -WorkingDirectory $installerDir",
-    "  Write-LauncherLog 'installer launch success'",
-    "} catch {",
-    "  $errorText = ($_ | Out-String).Trim()",
-    "  Write-LauncherError $errorText",
-    "  Write-LauncherLog ('launcher error: ' + $errorText)",
-    "  throw",
-    "}",
-  ].join("\r\n") + "\r\n";
+    "@echo off",
+    `set "LOG=${escapedDebugLogPath}"`,
+    `set "ERROR_LOG=${escapedErrorLogPath}"`,
+    `echo CMD launcher started %DATE% %TIME%>>"%LOG%"`,
+    `echo Installer path: "${escapedInstallerPath}">>"%LOG%"`,
+    "",
+    "timeout /t 2 /nobreak >nul",
+    "",
+    "set COUNT=0",
+    ":waitloop",
+    'tasklist /FI "IMAGENAME eq CamPlan.exe" | find /I "CamPlan.exe" >nul',
+    "if errorlevel 1 goto launch",
+    "",
+    "set /A COUNT+=1",
+    "if %COUNT% GEQ 20 goto launch",
+    "",
+    "timeout /t 1 /nobreak >nul",
+    "goto waitloop",
+    "",
+    ":launch",
+    `echo Launching installer %DATE% %TIME%>>"%LOG%"`,
+    `if not exist "${escapedInstallerPath}" (`,
+    `  echo ERROR installer missing: "${escapedInstallerPath}">>"%ERROR_LOG%"`,
+    "  exit /b 1",
+    ")",
+    "",
+    `start "" "${escapedInstallerPath}"`,
+    `echo Installer start command executed %DATE% %TIME%>>"%LOG%"`,
+    "exit /b 0",
+    "",
+  ].join("\r\n");
+}
+
+function buildVbsUpdateLauncherScript(cmdPath) {
+  const escapedCmdPath = String(cmdPath).replace(/"/g, '""');
+  return [
+    'Set WshShell = CreateObject("WScript.Shell")',
+    `WshShell.Run chr(34) & "${escapedCmdPath}" & chr(34), 0, False`,
+    "",
+  ].join("\r\n");
 }
 
 async function launchInstallerAfterExit(targetPath) {
   const absoluteInstallerPath = normalizeAbsolutePath(targetPath);
   const absoluteCheck = path.isAbsolute(absoluteInstallerPath);
   const exists = existsSync(absoluteInstallerPath);
-  const installerDir = path.dirname(absoluteInstallerPath);
-  const launcherScript = buildPowerShellUpdateLauncherScript({
+  const launcherCmdScript = buildCmdUpdateLauncherScript({
     installerPath: absoluteInstallerPath,
   });
-
-  if (launcherScript.includes("parentPid") || launcherScript.includes("Get-Process -Id")) {
-    const message =
-      "Launcher script generation regression: parentPid or Get-Process -Id detected.";
-    logUpdateError(message);
-    throw new Error(message);
-  }
+  const launcherVbsScript = buildVbsUpdateLauncherScript(updateLauncherCmdPath);
 
   logUpdateDebug("downloaded installer path:", absoluteInstallerPath);
-  logUpdateDebug("generated launcher script path:", updateLauncherScriptPath);
-  logUpdateDebug("selected launch method:", "powershell-hidden-script");
+  logUpdateDebug("generated launcher cmd path:", updateLauncherCmdPath);
+  logUpdateDebug("generated launcher vbs path:", updateLauncherVbsPath);
+  logUpdateDebug("selected launch method:", "wscript-hidden-cmd");
   logUpdateDebug("path.isAbsolute:", String(absoluteCheck));
   logUpdateDebug("fs.existsSync:", String(exists));
   logUpdateDebug("process.pid:", String(process.pid));
@@ -434,82 +423,43 @@ async function launchInstallerAfterExit(targetPath) {
   const stats = await fs.stat(absoluteInstallerPath);
   logUpdateDebug("installer size bytes:", String(stats.size));
 
-  logUpdateDebug("before launcher script write:", updateLauncherScriptPath);
-  writeFileSync(updateLauncherScriptPath, launcherScript, "utf8");
-  logUpdateDebug("after launcher script write:", updateLauncherScriptPath);
+  logUpdateDebug("before launcher script write:", updateLauncherCmdPath);
+  writeFileSync(updateLauncherCmdPath, launcherCmdScript, "utf8");
+  logUpdateDebug("after launcher script write:", updateLauncherCmdPath);
 
-  if (!existsSync(updateLauncherScriptPath)) {
-    const message = `Не удалось создать launcher script: ${updateLauncherScriptPath}`;
+  logUpdateDebug("before launcher script write:", updateLauncherVbsPath);
+  writeFileSync(updateLauncherVbsPath, launcherVbsScript, "utf8");
+  logUpdateDebug("after launcher script write:", updateLauncherVbsPath);
+
+  if (!existsSync(updateLauncherCmdPath)) {
+    const message = `Не удалось создать launcher script: ${updateLauncherCmdPath}`;
+    logUpdateError(message);
+    throw new Error(message);
+  }
+
+  if (!existsSync(updateLauncherVbsPath)) {
+    const message = `Не удалось создать launcher script: ${updateLauncherVbsPath}`;
     logUpdateError(message);
     throw new Error(message);
   }
 
   try {
-    logUpdateDebug("before launcher spawn:", updateLauncherScriptPath);
-    const result = await spawnDetachedProcess("powershell.exe", [
-      "-NoProfile",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-WindowStyle",
-      "Hidden",
-      "-File",
-      updateLauncherScriptPath,
-    ], {
+    logUpdateDebug("before launcher spawn:", updateLauncherVbsPath);
+    const result = await spawnDetachedProcess("wscript.exe", [updateLauncherVbsPath], {
       windowsHide: true,
     });
     logUpdateDebug("after launcher spawn:", `spawned pid=${result.pid ?? "unknown"}`);
 
-    closeAllAppWindowsForUpdate();
-    logUpdateDebug("before app.exit(0)");
-
     return {
-      method: "powershell-hidden-script",
+      method: "wscript-hidden-cmd",
       path: absoluteInstallerPath,
-      scriptPath: updateLauncherScriptPath,
+      scriptPath: updateLauncherVbsPath,
       spawnedPid: result.pid ?? null,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logUpdateError("powershell launcher spawn failed:", errorMessage);
-    logUpdateDebug("fallback launch method:", "shell.openPath");
-
-    const shellResult = await shell.openPath(absoluteInstallerPath);
-    if (!shellResult) {
-      logUpdateDebug("fallback launch result:", "shell.openPath success");
-      return {
-        method: "shell.openPath",
-        path: absoluteInstallerPath,
-        scriptPath: updateLauncherScriptPath,
-      };
-    }
-
-    logUpdateError("shell.openPath failed:", shellResult);
-    logUpdateDebug("fallback launch method:", "detached-cmd-start");
-
-    try {
-      logUpdateDebug("before fallback spawn:", absoluteInstallerPath);
-      const result = await spawnDetachedProcess("cmd.exe", [
-        "/c",
-        "start",
-        "",
-        absoluteInstallerPath,
-      ], {
-        windowsHide: true,
-      });
-      logUpdateDebug("after fallback spawn:", `cmd spawned pid=${result.pid ?? "unknown"}`);
-      closeAllAppWindowsForUpdate();
-      logUpdateDebug("before app.exit(0)");
-      return {
-        method: "detached-cmd-start",
-        path: absoluteInstallerPath,
-        scriptPath: updateLauncherScriptPath,
-        spawnedPid: result.pid ?? null,
-      };
-    } catch (fallbackError) {
-      const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
-      logUpdateError("detached cmd fallback failed:", fallbackMessage);
-      throw new Error(`Не удалось запустить установщик: ${errorMessage}; fallback: ${fallbackMessage}`);
-    }
+    logUpdateError("wscript launcher spawn failed:", errorMessage);
+    throw new Error(`Не удалось запустить установщик: ${errorMessage}`);
   }
 }
 
@@ -711,6 +661,7 @@ app.whenReady().then(() => {
       if ("spawnedPid" in launchResult) {
         logUpdateDebug("launch spawned pid:", String(launchResult.spawnedPid ?? "unknown"));
       }
+      closeAllAppWindowsForUpdate();
       pendingDownloadedInstaller = null;
       logUpdateDebug("app.exit(0) after installer launcher spawn");
       app.exit(0);
