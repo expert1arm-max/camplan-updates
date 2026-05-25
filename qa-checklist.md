@@ -150,3 +150,5 @@
 - [ ] Repeat the same restore check after opening a project through the left sidebar `+`.
 - [ ] Restart twice in a row and verify the empty startup state did not overwrite the saved project snapshot.
 - [ ] Verify `release\CamPlan-Installer-0.2.30.exe` installs without the NSIS close/retry dialog `Не удалось закрыть CamPlan`.
+- [ ] Verify `release\CamPlan-Installer-0.2.31.exe` installs from `0.2.30` without any `РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РєСЂС‹С‚СЊ CamPlan` dialog and without waiting for hidden input.
+- [ ] Verify `release\CamPlan-Installer-0.2.31.exe` installs from `0.2.30` without any close-CamPlan dialog and without waiting for hidden input.

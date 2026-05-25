@@ -44,3 +44,4 @@
 - The hidden WScript helper is spawned during QA and the existing debug/error logs still capture missing-installer details if the file cannot be found.
 - Restore persistence now writes the imported/edited snapshot to both IndexedDB and `localStorage`, records `savedAt`/`updatedAt` plus active object/floor metadata, and startup chooses the freshest non-empty snapshot so an empty project cannot overwrite a valid one on reopen.
 - Temporary QA instrumentation now logs every storage read/write with object/floor counts, active refs, and first object name so the empty-overwrite source can be proven before the guard is kept.
+- The NSIS installer now relies on local template overrides in `build/installer.nsh`, `build/installUtil.nsh`, and `build/allowOnlyOneInstallerInstance.nsh` to keep the update install flow silent after CamPlan exits.

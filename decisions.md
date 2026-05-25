@@ -24,3 +24,4 @@
 - The visible `Не удалось закрыть CamPlan` prompt was actually coming from the stock `installUtil.nsh` old-version uninstall loop, so the repo now carries a local `build/installUtil.nsh` override that removes the retry dialog entirely.
 - Imported projects are now persisted immediately to both IndexedDB and the `localStorage` backup, and startup restore prefers the freshest non-empty snapshot so a blank startup state cannot overwrite the last opened project.
 - Restore/autosave now uses an explicit `hasHydratedFromStorage` guard and blocks empty snapshot overwrites unless the action was an explicit `new-project-confirmed`.
+- NSIS close/retry prompts are being removed by local template overrides in `build/installer.nsh`, `build/installUtil.nsh`, and `build/allowOnlyOneInstallerInstance.nsh` so the update installer can continue without a blocking app-close dialog.

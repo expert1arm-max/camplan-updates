@@ -229,3 +229,4 @@
 - The NSIS close/retry prompt is being removed at the stock `installUtil.nsh` level, because the visible `Не удалось закрыть CamPlan` dialog came from the old-version uninstall loop rather than `customCheckAppRunning`.
 - Built `0.2.30` locally as `release\CamPlan-Installer-0.2.30.exe`; the release binary and generated NSIS debug output no longer contain the close/retry prompt text.
 - Restore investigation is now instrumented with temporary QA logs around every storage read/write, explicit `hasHydratedFromStorage` gating, and an empty-snapshot overwrite guard that only allows `new-project-confirmed` to write a blank project.
+- Added a local `build/allowOnlyOneInstallerInstance.nsh` override to remove the remaining NSIS close/retry app-running dialog path; release build `0.2.31` is ready as `release\CamPlan-Installer-0.2.31.exe`.
