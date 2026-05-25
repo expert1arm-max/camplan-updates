@@ -1134,7 +1134,7 @@ export function PlanCanvas({
       const text = await bridge.openJsonFile();
       if (text) {
         try {
-          importJSON(text);
+          await importJSON(text);
         } catch {
           console.error("Ошибка открытия проекта");
         }
@@ -1151,7 +1151,7 @@ export function PlanCanvas({
     if (!file) return;
 
     try {
-      importJSON(await file.text());
+      await importJSON(await file.text());
     } catch {
       console.error("Ошибка открытия проекта");
     }

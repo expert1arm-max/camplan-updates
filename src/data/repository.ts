@@ -82,6 +82,14 @@ type SnapshotCandidate = {
   contentCount: number;
 };
 
+type SnapshotSummary = {
+  objectsLength: number;
+  floorsLength: number;
+  activeObjectId: string | null;
+  activeFloorId: string | null;
+  firstObjectName: string;
+};
+
 function getBackupStorage() {
   if (typeof localStorage === "undefined") return null;
   return localStorage;
@@ -106,6 +114,40 @@ function asNumber(value: unknown, fallback = 0) {
 
 function asBoolean(value: unknown, fallback = false) {
   return typeof value === "boolean" ? value : fallback;
+}
+
+function asNullableString(value: unknown) {
+  return typeof value === "string" ? value : null;
+}
+
+function getSnapshotSummary(data: AppData, activeObjectId: string | null = null, activeFloorId: string | null = null): SnapshotSummary {
+  return {
+    objectsLength: data.objects.length,
+    floorsLength: data.floors.length,
+    activeObjectId,
+    activeFloorId,
+    firstObjectName: data.objects[0]?.name ?? "",
+  };
+}
+
+function formatSnapshotSummary(summary: SnapshotSummary) {
+  return [
+    `objects.length=${summary.objectsLength}`,
+    `floors.length=${summary.floorsLength}`,
+    `activeObjectId=${summary.activeObjectId ?? "null"}`,
+    `activeFloorId=${summary.activeFloorId ?? "null"}`,
+    `first object name=${JSON.stringify(summary.firstObjectName)}`,
+  ].join(" ");
+}
+
+function isEmptySnapshot(data: AppData) {
+  return (
+    data.objects.length === 0 &&
+    data.floors.length === 0 &&
+    data.mapElements.length === 0 &&
+    data.devices.length === 0 &&
+    data.deviceConnections.length === 0
+  );
 }
 
 function asArray(value: unknown): unknown[] {
@@ -159,7 +201,11 @@ async function readRaw(): Promise<unknown | null> {
     const tx = db.transaction(STORE_NAME, "readonly");
     const store = tx.objectStore(STORE_NAME);
     const request = store.get(STORAGE_KEY);
-    request.onsuccess = () => resolve(request.result ?? null);
+    request.onsuccess = () => {
+      const value = request.result ?? null;
+      console.info(`restore:read indexeddb ${value ? "found" : "empty"}`);
+      resolve(value);
+    };
     request.onerror = () => reject(request.error);
     tx.oncomplete = () => db.close();
   });
@@ -168,6 +214,19 @@ async function readRaw(): Promise<unknown | null> {
 async function writeRaw(value: unknown): Promise<void> {
   const db = await openDb();
   if (!db) return;
+
+  const data = isRecord(value) && isRecord(value.data) ? normalizeAppData(value.data) : null;
+  const activeObjectId = isRecord(value) ? asNullableString(value.activeObjectId) : null;
+  const activeFloorId = isRecord(value) ? asNullableString(value.activeFloorId) : null;
+  if (data) {
+    console.info(
+      `persist:write indexeddb ${formatSnapshotSummary(
+        getSnapshotSummary(data, activeObjectId, activeFloorId),
+      )}`,
+    );
+  } else {
+    console.info("persist:write indexeddb raw snapshot");
+  }
 
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readwrite");
@@ -190,9 +249,15 @@ function readBackupRaw(): unknown | null {
 
   try {
     const raw = storage.getItem(BACKUP_STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
+    if (!raw) {
+      console.info("restore:read localstorage empty");
+      return null;
+    }
+    const parsed = JSON.parse(raw);
+    console.info("restore:read localstorage found");
+    return parsed;
   } catch {
+    console.info("restore:read localstorage invalid");
     return null;
   }
 }
@@ -200,6 +265,19 @@ function readBackupRaw(): unknown | null {
 function writeBackupRaw(value: unknown) {
   const storage = getBackupStorage();
   if (!storage) return;
+
+  const data = isRecord(value) && isRecord(value.data) ? normalizeAppData(value.data) : null;
+  const activeObjectId = isRecord(value) ? asNullableString(value.activeObjectId) : null;
+  const activeFloorId = isRecord(value) ? asNullableString(value.activeFloorId) : null;
+  if (data) {
+    console.info(
+      `persist:write localstorage ${formatSnapshotSummary(
+        getSnapshotSummary(data, activeObjectId, activeFloorId),
+      )}`,
+    );
+  } else {
+    console.info("persist:write localstorage raw snapshot");
+  }
 
   try {
     storage.setItem(BACKUP_STORAGE_KEY, JSON.stringify(value));
@@ -252,7 +330,11 @@ function toPersistedCandidate(
         : snapshot.settings.uiState?.activeFloorId ?? null;
     const contentCount = countSnapshotContent(snapshot);
 
-    console.info(`restore:${source} ${contentCount > 0 ? "found" : "empty"}`);
+    console.info(
+      `restore:${source} ${contentCount > 0 ? "found" : "empty"} ${formatSnapshotSummary(
+        getSnapshotSummary(snapshot, activeObjectId, activeFloorId),
+      )}`,
+    );
 
     return {
       source,
@@ -542,6 +624,9 @@ export async function loadAppData(): Promise<AppData | null> {
     const latest = chooseLatestSnapshot(indexeddb, localstorage);
     console.info(`restore:selected source ${latest?.source ?? "none"}`);
     console.info(`restore:objects count ${latest?.snapshot.objects.length ?? 0}`);
+    console.info(
+      `restore:activeObjectId ${latest?.activeObjectId ?? "null"} restore:activeFloorId ${latest?.activeFloorId ?? "null"}`,
+    );
     return latest?.snapshot ?? null;
   } catch {
     try {
@@ -552,10 +637,14 @@ export async function loadAppData(): Promise<AppData | null> {
       const latest = chooseLatestSnapshot(indexeddb, localstorage);
       console.info(`restore:selected source ${latest?.source ?? "none"}`);
       console.info(`restore:objects count ${latest?.snapshot.objects.length ?? 0}`);
+      console.info(
+        `restore:activeObjectId ${latest?.activeObjectId ?? "null"} restore:activeFloorId ${latest?.activeFloorId ?? "null"}`,
+      );
       return latest?.snapshot ?? null;
     } catch {
       console.info("restore:selected source none");
       console.info("restore:objects count 0");
+      console.info("restore:activeObjectId null restore:activeFloorId null");
       return null;
     }
   }
@@ -565,23 +654,39 @@ export async function saveAppData(
   data: AppData,
   metadata?: {
     reason?: string;
+    caller?: string;
     activeObjectId?: string | null;
     activeFloorId?: string | null;
   },
 ): Promise<void> {
   const now = Date.now();
+  const normalized = normalizeAppData(clone(data));
+  const reason = metadata?.reason ?? "autosave";
+  const caller = metadata?.caller ?? "unknown";
   const uiState = {
-    ...(data.settings.uiState ?? {}),
-    activeObjectId: metadata?.activeObjectId ?? data.settings.uiState?.activeObjectId ?? null,
-    activeFloorId: metadata?.activeFloorId ?? data.settings.uiState?.activeFloorId ?? null,
+    ...(normalized.settings.uiState ?? {}),
+    activeObjectId:
+      metadata?.activeObjectId ?? normalized.settings.uiState?.activeObjectId ?? null,
+    activeFloorId:
+      metadata?.activeFloorId ?? normalized.settings.uiState?.activeFloorId ?? null,
   };
   const payload: AppData = {
-    ...clone(data),
+    ...clone(normalized),
     settings: {
-      ...clone(data.settings),
+      ...clone(normalized.settings),
       uiState,
     },
   };
+  const summary = getSnapshotSummary(
+    payload,
+    uiState.activeObjectId ?? null,
+    uiState.activeFloorId ?? null,
+  );
+  console.info(`persist:attempt reason=${reason} caller=${caller} ${formatSnapshotSummary(summary)}`);
+  if (isEmptySnapshot(payload) && reason !== "new-project-confirmed") {
+    console.info(`persist:skip reason=${reason} caller=${caller} empty snapshot blocked`);
+    return;
+  }
   const snapshot: PersistedSnapshot = {
     data: payload,
     savedAt: now,
@@ -591,5 +696,5 @@ export async function saveAppData(
   };
   writeBackupRaw(snapshot);
   await writeRaw(snapshot);
-  console.info(`persist:after ${metadata?.reason ?? "autosave"}`);
+  console.info(`persist:after ${reason} caller=${caller} ${formatSnapshotSummary(summary)}`);
 }

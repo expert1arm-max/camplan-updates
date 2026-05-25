@@ -37,6 +37,7 @@ interface State extends AppData {
   future: EditorSnapshot[];
 
   hydrate: (data: AppData) => void;
+  hasHydratedFromStorage: boolean;
   setActiveFloor: (id: string | null) => void;
   focusObject: (id: string) => void;
   focusDevice: (id: string) => void;
@@ -93,7 +94,7 @@ interface State extends AppData {
   updateSettings: (patch: Partial<AppSettings>) => void;
   updateUiState: (patch: Partial<UiLayoutState>) => void;
   newProject: () => void;
-  importJSON: (data: string) => void;
+  importJSON: (data: string) => Promise<void>;
   exportJSON: () => string;
 }
 
@@ -110,10 +111,28 @@ type EditorSnapshot = AppData & {
 type ClipboardItem = { kind: "device"; device: Device } | { kind: "element"; element: MapElement };
 
 let clipboardItem: ClipboardItem | null = null;
-let persistenceReady = false;
 
 function timestamp() {
   return new Date().toISOString();
+}
+
+function inferCallerName() {
+  const stack = new Error().stack?.split("\n").map((line) => line.trim()) ?? [];
+  for (const line of stack) {
+    const match = /^at (.+?)(?: \(|$)/.exec(line);
+    const name = match?.[1]?.replace(/^Object\./, "") ?? "";
+    if (!name) continue;
+    if (
+      name === "inferCallerName" ||
+      name === "persistSnapshot" ||
+      name === "saveAppData" ||
+      name === "mutate"
+    ) {
+      continue;
+    }
+    return name;
+  }
+  return "unknown";
 }
 
 function selectData(state: State): AppData {
@@ -266,9 +285,14 @@ function mutate(
 }
 
 function persistSnapshot(state: State, reason = "autosave") {
-  if (!persistenceReady) return;
+  if (!state.hasHydratedFromStorage) {
+    console.info(`persist:skip reason=${reason} caller=${inferCallerName()} not hydrated`);
+    return;
+  }
+
   void saveAppData(selectData(state), {
     reason,
+    caller: inferCallerName(),
     activeObjectId: state.activeObjectId,
     activeFloorId: state.activeFloorId,
   });
@@ -276,9 +300,10 @@ function persistSnapshot(state: State, reason = "autosave") {
 
 export function flushCurrentSnapshot() {
   const state = useStore.getState();
-  if (!state.isHydrated || !persistenceReady) return;
+  if (!state.isHydrated || !state.hasHydratedFromStorage) return;
   void saveAppData(selectData(state), {
     reason: "exit",
+    caller: "flushCurrentSnapshot",
     activeObjectId: state.activeObjectId,
     activeFloorId: state.activeFloorId,
   });
@@ -503,6 +528,7 @@ export const useStore = create<State>()((set, get) => ({
   currentCableType: "utp",
   savedAt: Date.now(),
   isHydrated: false,
+  hasHydratedFromStorage: false,
   history: [],
   future: [],
 
@@ -523,6 +549,7 @@ export const useStore = create<State>()((set, get) => ({
         currentCableType: "utp",
         savedAt: Date.now(),
         isHydrated: true,
+        hasHydratedFromStorage: true,
         history: [],
         future: [],
       };
@@ -1194,16 +1221,24 @@ export const useStore = create<State>()((set, get) => ({
       currentCableType: "utp",
       savedAt: Date.now(),
       isHydrated: true,
+      hasHydratedFromStorage: true,
       history: [],
       future: [],
     }));
-    persistSnapshot(get(), "new-project");
+    persistSnapshot(get(), "new-project-confirmed");
   },
 
-  importJSON: (data) => {
+  importJSON: async (data) => {
     const parsed = normalizeAppData(JSON.parse(data));
     const resolved = resolveStartupFocus(parsed);
-    mutate(set, get, () => ({
+    await saveAppData(parsed, {
+      reason: "import",
+      caller: "importJSON",
+      activeObjectId: resolved.objectId,
+      activeFloorId: resolved.floorId,
+    });
+    set((state) => ({
+      ...state,
       ...parsed,
       settings: resolved.settings,
       activeObjectId: resolved.objectId,
@@ -1212,18 +1247,25 @@ export const useStore = create<State>()((set, get) => ({
       mode: "select",
       isEditMode: false,
       isHydrated: true,
-    }), "import");
+      hasHydratedFromStorage: true,
+      savedAt: Date.now(),
+      history: [],
+      future: [],
+    }));
   },
 
   exportJSON: () => JSON.stringify(selectData(get()), null, 2),
 }));
 
 export async function bootstrapStore() {
+  console.info("restore:before hydration");
   const data = await loadAppData();
   if (data) {
     useStore.getState().hydrate(data);
-    persistenceReady = true;
     const resolved = resolveStartupFocus(data);
+    console.info(
+      `restore:final activeObjectId ${useStore.getState().activeObjectId ?? resolved.objectId ?? "null"} restore:final activeFloorId ${useStore.getState().activeFloorId ?? resolved.floorId ?? "null"}`,
+    );
     if (resolved.changed) {
       persistSnapshot(useStore.getState(), "restore");
     }
@@ -1231,7 +1273,7 @@ export async function bootstrapStore() {
   }
 
   useStore.getState().hydrate(initial);
-  persistenceReady = true;
+  console.info("restore:final activeObjectId null restore:final activeFloorId null");
 }
 
 export const statusLabels: Record<DeviceStatus, string> = {

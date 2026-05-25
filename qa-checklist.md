@@ -85,6 +85,8 @@
 - [ ] Verify the launcher waits for `CamPlan.exe` to disappear by name, not by PID, before it starts the installer.
 - [ ] Verify the installer prompt no longer shows a "failed to close CamPlan" message after the app window closes.
 - [ ] Verify the built installer or generated NSIS output does not contain `Не удалось закрыть`, `Please close`, `Retry`, `CloseApplication`, `nsProcess`, or `FindProcDLL`.
+- [ ] Verify the restore logs prove the exact write path after import and that no autosave writes `objects.length = 0` after a valid project import.
+- [ ] Verify `hasHydratedFromStorage` prevents autosave before restore completes, while `new-project-confirmed` is still allowed to save an empty snapshot.
 - [ ] Проверить, что после нажатия `+` у строки объекта создаётся дочерняя зона/этаж, а фокус переходит на план/canvas.
 - [ ] Проверить, что ручное переименование объекта и зоны через карандаш или double click остаётся редактируемым.
 - [ ] Проверить, что в поле переименования объекта/зоны работают обычный ввод, Backspace, Delete и вставка текста без дополнительного клика по экрану.

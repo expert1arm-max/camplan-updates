@@ -391,7 +391,7 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
       const text = await bridge.openJsonFile();
       if (text) {
         try {
-          importJSON(text);
+          await importJSON(text);
         } catch {
           console.error("Ошибка импорта");
         }
@@ -782,7 +782,7 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
           if (!file) return;
           const text = await file.text();
           try {
-            importJSON(text);
+            await importJSON(text);
           } catch {
             console.error("Ошибка импорта");
           }
