@@ -223,3 +223,4 @@
 - Wall endpoint rotation drag no longer cancels on canvas exit; the drag stays active when the cursor leaves and re-enters the field, and it ends on mouseup even if release happens outside the SVG.
 - Plan canvas coordinate mapping now uses the SVG screen CTM instead of rect-based math, so wall and room drawing starts directly under the pointer even when the canvas is scaled or letterboxed.
 - Prepared `0.2.27` after the pointer-alignment fix, with the build version bumped and the release flow ready for GitHub publication.
+- Added an exit-time snapshot flush in the root shell so the last opened project is written again on `beforeunload`/`pagehide`, reducing the chance that closing the app drops the most recent project state.

@@ -2,7 +2,7 @@ import { useEffect, type ReactNode } from "react";
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
-import { bootstrapStore, useStore } from "@/data/store";
+import { bootstrapStore, flushCurrentSnapshot, useStore } from "@/data/store";
 
 const csp = import.meta.env.DEV
   ? [
@@ -107,6 +107,19 @@ function RootComponent() {
 
   useEffect(() => {
     void bootstrapStore();
+  }, []);
+
+  useEffect(() => {
+    const persistOnExit = () => {
+      flushCurrentSnapshot();
+    };
+
+    window.addEventListener("beforeunload", persistOnExit);
+    window.addEventListener("pagehide", persistOnExit);
+    return () => {
+      window.removeEventListener("beforeunload", persistOnExit);
+      window.removeEventListener("pagehide", persistOnExit);
+    };
   }, []);
 
   useEffect(() => {

@@ -19,3 +19,4 @@
 - The visible product name is now `CamPlan`, while the Electron `appId` stays unchanged to avoid breaking the existing update channel for already installed builds.
 - SVG pointer coordinates for plan drawing now use `getScreenCTM()`/SVG matrix transforms instead of rect-based ratios, because the canvas can letterbox or scale inside the page and rect math introduces a visible offset when starting walls or rooms.
 - The coordinate fix is intentionally centralized in `PlanCanvas` helper conversion functions so walls, rooms, and any other pointer-driven SVG interactions stay aligned under the cursor across zoom, scaling, and letterboxing.
+- The last opened project is now flushed again on `beforeunload`/`pagehide` so a quick app close does not lose the most recent persisted snapshot before the next startup restore.

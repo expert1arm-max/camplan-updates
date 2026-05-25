@@ -267,6 +267,12 @@ function persistSnapshot(state: State) {
   void saveAppData(selectData(state));
 }
 
+export function flushCurrentSnapshot() {
+  const state = useStore.getState();
+  if (!state.isHydrated) return;
+  void saveAppData(selectData(state));
+}
+
 function updateList<T extends { id: string; updatedAt: string }>(
   items: T[],
   id: string,
