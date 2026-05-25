@@ -1373,23 +1373,29 @@ export function PlanCanvas({
   const toSvg = (clientX: number, clientY: number) => {
     const svg = svgRef.current;
     if (!svg) return { x: 0, y: 0 };
-    const rect = svg.getBoundingClientRect();
-    const x = vb.x + ((clientX - rect.left) / rect.width) * vb.w;
-    const y = vb.y + ((clientY - rect.top) / rect.height) * vb.h;
-    return { x, y };
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return { x: 0, y: 0 };
+    const point = svg.createSVGPoint();
+    point.x = clientX;
+    point.y = clientY;
+    const mapped = point.matrixTransform(ctm.inverse());
+    return { x: mapped.x, y: mapped.y };
   };
 
   const toClientPoint = (x: number, y: number) => {
     const svg = svgRef.current;
+    if (!svg) return { left: x, top: y };
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return { left: x, top: y };
+    const point = svg.createSVGPoint();
+    point.x = x;
+    point.y = y;
+    const mapped = point.matrixTransform(ctm);
     const wrap = canvasWrapRef.current;
-    if (!svg || !wrap) return { left: x, top: y };
-
-    const svgRect = svg.getBoundingClientRect();
-    const wrapRect = wrap.getBoundingClientRect();
-
+    const wrapRect = wrap?.getBoundingClientRect();
     return {
-      left: ((x - vb.x) / vb.w) * svgRect.width + svgRect.left - wrapRect.left,
-      top: ((y - vb.y) / vb.h) * svgRect.height + svgRect.top - wrapRect.top,
+      left: mapped.x - (wrapRect?.left ?? 0),
+      top: mapped.y - (wrapRect?.top ?? 0),
     };
   };
 

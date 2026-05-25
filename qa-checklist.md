@@ -138,3 +138,4 @@
 
 ## Open project
 - [ ] Открыть JSON-проект через canvas и toolbar и проверить, что после успешного импорта не появляется modal alert `Проект открыт` или `Импорт выполнен`.
+- [ ] Verify that wall and room drawing starts exactly under the mouse pointer, without a visible offset, even when the plan canvas is scaled or letterboxed.
