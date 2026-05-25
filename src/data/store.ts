@@ -110,6 +110,7 @@ type EditorSnapshot = AppData & {
 type ClipboardItem = { kind: "device"; device: Device } | { kind: "element"; element: MapElement };
 
 let clipboardItem: ClipboardItem | null = null;
+let persistenceReady = false;
 
 function timestamp() {
   return new Date().toISOString();
@@ -252,6 +253,7 @@ function mutate(
   set: (fn: (state: State) => Partial<State>) => void,
   get: () => State,
   recipe: (state: State) => Partial<State>,
+  reason = "autosave",
 ) {
   const before = snapshotState(get());
   set((state) => ({
@@ -260,17 +262,26 @@ function mutate(
     future: [],
     savedAt: Date.now(),
   }));
-  persistSnapshot(get());
+  persistSnapshot(get(), reason);
 }
 
-function persistSnapshot(state: State) {
-  void saveAppData(selectData(state));
+function persistSnapshot(state: State, reason = "autosave") {
+  if (!persistenceReady) return;
+  void saveAppData(selectData(state), {
+    reason,
+    activeObjectId: state.activeObjectId,
+    activeFloorId: state.activeFloorId,
+  });
 }
 
 export function flushCurrentSnapshot() {
   const state = useStore.getState();
-  if (!state.isHydrated) return;
-  void saveAppData(selectData(state));
+  if (!state.isHydrated || !persistenceReady) return;
+  void saveAppData(selectData(state), {
+    reason: "exit",
+    activeObjectId: state.activeObjectId,
+    activeFloorId: state.activeFloorId,
+  });
 }
 
 function updateList<T extends { id: string; updatedAt: string }>(
@@ -497,13 +508,7 @@ export const useStore = create<State>()((set, get) => ({
 
   hydrate: (data) =>
     set((state) => {
-      const { objectId, floorId, settings, changed } = resolveStartupFocus(data);
-      if (changed) {
-        void saveAppData({
-          ...data,
-          settings,
-        });
-      }
+      const { objectId, floorId, settings } = resolveStartupFocus(data);
       return {
         ...state,
         ...data,
@@ -1192,7 +1197,7 @@ export const useStore = create<State>()((set, get) => ({
       history: [],
       future: [],
     }));
-    persistSnapshot(get());
+    persistSnapshot(get(), "new-project");
   },
 
   importJSON: (data) => {
@@ -1207,8 +1212,7 @@ export const useStore = create<State>()((set, get) => ({
       mode: "select",
       isEditMode: false,
       isHydrated: true,
-    }));
-    persistSnapshot(get());
+    }), "import");
   },
 
   exportJSON: () => JSON.stringify(selectData(get()), null, 2),
@@ -1218,10 +1222,16 @@ export async function bootstrapStore() {
   const data = await loadAppData();
   if (data) {
     useStore.getState().hydrate(data);
+    persistenceReady = true;
+    const resolved = resolveStartupFocus(data);
+    if (resolved.changed) {
+      persistSnapshot(useStore.getState(), "restore");
+    }
     return;
   }
 
   useStore.getState().hydrate(initial);
+  persistenceReady = true;
 }
 
 export const statusLabels: Record<DeviceStatus, string> = {

@@ -64,7 +64,23 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value));
 }
 
-type PersistedSnapshot = AppData & { savedAt?: number };
+type PersistedSnapshot = {
+  data: AppData;
+  savedAt: number;
+  updatedAt: number;
+  activeObjectId: string | null;
+  activeFloorId: string | null;
+};
+
+type SnapshotCandidate = {
+  source: "indexeddb" | "localstorage";
+  snapshot: AppData;
+  savedAt: number;
+  updatedAt: number;
+  activeObjectId: string | null;
+  activeFloorId: string | null;
+  contentCount: number;
+};
 
 function getBackupStorage() {
   if (typeof localStorage === "undefined") return null;
@@ -192,10 +208,10 @@ function writeBackupRaw(value: unknown) {
   }
 }
 
-function readPersistedSavedAt(value: unknown): number {
+function readPersistedTimestamp(value: unknown): number {
   if (!isRecord(value)) return 0;
-  const savedAt = Number(value.savedAt);
-  return Number.isFinite(savedAt) ? savedAt : 0;
+  const timestamp = Number(value.updatedAt ?? value.savedAt);
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function countSnapshotContent(value: unknown): number {
@@ -210,26 +226,70 @@ function countSnapshotContent(value: unknown): number {
   ].reduce((sum, count) => sum + count, 0);
 }
 
-function pickLatestSnapshot(primary: unknown | null, backup: unknown | null): unknown | null {
-  if (!primary && !backup) return null;
-  if (!primary) return backup;
-  if (!backup) return primary;
-
-  const primarySavedAt = readPersistedSavedAt(primary);
-  const backupSavedAt = readPersistedSavedAt(backup);
-
-  if (primarySavedAt !== backupSavedAt) {
-    return primarySavedAt > backupSavedAt ? primary : backup;
+function toPersistedCandidate(
+  source: SnapshotCandidate["source"],
+  raw: unknown,
+): SnapshotCandidate | null {
+  if (!isRecord(raw)) {
+    console.info(`restore:${source} invalid`);
+    return null;
   }
 
-  const primaryCount = countSnapshotContent(primary);
-  const backupCount = countSnapshotContent(backup);
+  const payload = isRecord(raw.data) ? raw.data : raw;
+  try {
+    const snapshot = normalizeAppData(payload);
+    const savedAt = readPersistedTimestamp(raw);
+    const updatedAt = Number(
+      isRecord(raw) ? Number(raw.updatedAt ?? raw.savedAt ?? savedAt) : savedAt,
+    );
+    const activeObjectId =
+      typeof raw.activeObjectId === "string" || raw.activeObjectId === null
+        ? raw.activeObjectId
+        : snapshot.settings.uiState?.activeObjectId ?? null;
+    const activeFloorId =
+      typeof raw.activeFloorId === "string" || raw.activeFloorId === null
+        ? raw.activeFloorId
+        : snapshot.settings.uiState?.activeFloorId ?? null;
+    const contentCount = countSnapshotContent(snapshot);
 
-  if (primaryCount !== backupCount) {
-    return primaryCount > backupCount ? primary : backup;
+    console.info(`restore:${source} ${contentCount > 0 ? "found" : "empty"}`);
+
+    return {
+      source,
+      snapshot,
+      savedAt: Number.isFinite(savedAt) ? savedAt : 0,
+      updatedAt: Number.isFinite(updatedAt) ? updatedAt : Number.isFinite(savedAt) ? savedAt : 0,
+      activeObjectId,
+      activeFloorId,
+      contentCount,
+    };
+  } catch {
+    console.info(`restore:${source} invalid`);
+    return null;
+  }
+}
+
+function chooseLatestSnapshot(
+  primary: SnapshotCandidate | null,
+  backup: SnapshotCandidate | null,
+): SnapshotCandidate | null {
+  const nonEmpty = [primary, backup].filter((candidate): candidate is SnapshotCandidate =>
+    Boolean(candidate && candidate.contentCount > 0),
+  );
+
+  if (nonEmpty.length > 0) {
+    return nonEmpty.sort((a, b) => b.updatedAt - a.updatedAt || b.savedAt - a.savedAt)[0] ?? null;
   }
 
-  return primary;
+  const empty = [primary, backup].filter((candidate): candidate is SnapshotCandidate =>
+    Boolean(candidate && candidate.contentCount === 0),
+  );
+
+  if (empty.length > 0) {
+    return empty.sort((a, b) => b.updatedAt - a.updatedAt || b.savedAt - a.savedAt)[0] ?? null;
+  }
+
+  return null;
 }
 
 function normalizeSettings(input: unknown): AppSettings {
@@ -473,30 +533,63 @@ export function normalizeAppData(input: unknown): AppData {
 }
 
 export async function loadAppData(): Promise<AppData | null> {
+  console.info("restore:start");
   try {
-    const raw = await readRaw();
-    const backupRaw = readBackupRaw();
-    const latest = pickLatestSnapshot(raw, backupRaw);
-    if (!latest) return null;
-    return normalizeAppData(latest);
+    const indexeddbRaw = await readRaw();
+    const indexeddb = toPersistedCandidate("indexeddb", indexeddbRaw);
+    const localstorageRaw = readBackupRaw();
+    const localstorage = toPersistedCandidate("localstorage", localstorageRaw);
+    const latest = chooseLatestSnapshot(indexeddb, localstorage);
+    console.info(`restore:selected source ${latest?.source ?? "none"}`);
+    console.info(`restore:objects count ${latest?.snapshot.objects.length ?? 0}`);
+    return latest?.snapshot ?? null;
   } catch {
     try {
-      const raw = await readRaw();
-      const backupRaw = readBackupRaw();
-      const latest = pickLatestSnapshot(raw, backupRaw);
-      if (!latest) return null;
-      return normalizeAppData(latest);
+      const indexeddbRaw = await readRaw();
+      const indexeddb = toPersistedCandidate("indexeddb", indexeddbRaw);
+      const localstorageRaw = readBackupRaw();
+      const localstorage = toPersistedCandidate("localstorage", localstorageRaw);
+      const latest = chooseLatestSnapshot(indexeddb, localstorage);
+      console.info(`restore:selected source ${latest?.source ?? "none"}`);
+      console.info(`restore:objects count ${latest?.snapshot.objects.length ?? 0}`);
+      return latest?.snapshot ?? null;
     } catch {
+      console.info("restore:selected source none");
+      console.info("restore:objects count 0");
       return null;
     }
   }
 }
 
-export async function saveAppData(data: AppData): Promise<void> {
-  const snapshot: PersistedSnapshot = {
+export async function saveAppData(
+  data: AppData,
+  metadata?: {
+    reason?: string;
+    activeObjectId?: string | null;
+    activeFloorId?: string | null;
+  },
+): Promise<void> {
+  const now = Date.now();
+  const uiState = {
+    ...(data.settings.uiState ?? {}),
+    activeObjectId: metadata?.activeObjectId ?? data.settings.uiState?.activeObjectId ?? null,
+    activeFloorId: metadata?.activeFloorId ?? data.settings.uiState?.activeFloorId ?? null,
+  };
+  const payload: AppData = {
     ...clone(data),
-    savedAt: Date.now(),
+    settings: {
+      ...clone(data.settings),
+      uiState,
+    },
+  };
+  const snapshot: PersistedSnapshot = {
+    data: payload,
+    savedAt: now,
+    updatedAt: now,
+    activeObjectId: uiState.activeObjectId ?? null,
+    activeFloorId: uiState.activeFloorId ?? null,
   };
   writeBackupRaw(snapshot);
   await writeRaw(snapshot);
+  console.info(`persist:after ${metadata?.reason ?? "autosave"}`);
 }

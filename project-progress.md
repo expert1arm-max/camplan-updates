@@ -225,3 +225,4 @@
 - Prepared `0.2.27` after the pointer-alignment fix, with the build version bumped and the release flow ready for GitHub publication.
 - Added an exit-time snapshot flush in the root shell so the last opened project is written again on `beforeunload`/`pagehide`, reducing the chance that closing the app drops the most recent project state.
 - Added a no-op `customCheckAppRunning` NSIS override so the installer no longer injects the close/retry running-app prompt; release version bumped to `0.2.28`.
+- Current restore work now persists imported projects immediately to both IndexedDB and `localStorage`, logs restore/persist events for QA, and selects the freshest non-empty snapshot on startup so blank startup state cannot overwrite the last opened project; patch release is being prepared as `0.2.29`.
