@@ -1,8 +1,8 @@
 {
   "name": "tanstack_start_ts",
-  "version": "0.2.2",
+  "version": "0.2.32",
   "private": true,
-  "description": "Desktop CCTV manager for Windows.",
+  "description": "CamPlan desktop app for Windows.",
   "author": "Lovable",
   "sideEffects": false,
   "type": "module",
@@ -99,7 +99,9 @@
   },
   "build": {
     "appId": "com.camplan.cctvmanager",
-    "productName": "CCTV Manager",
+    "productName": "CamPlan",
+    "artifactName": "CamPlan-Installer-${version}.${ext}",
+    "executableName": "CamPlan",
     "directories": {
       "output": "release"
     },
@@ -112,7 +114,17 @@
       "main": "electron/main.cjs"
     },
     "asar": true,
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "CamPlan",
+      "uninstallDisplayName": "CamPlan",
+      "deleteAppDataOnUninstall": false,
+      "include": "build/installer.nsh"
+    },
     "win": {
+      "executableName": "CamPlan",
       "target": [
         "nsis"
       ]
