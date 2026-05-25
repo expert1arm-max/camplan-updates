@@ -6,7 +6,7 @@
 - [x] `npm run dist:win`
 
 ## Electron startup
-- [ ] Запустить свежий Windows installer `release\CamPlan-Installer-0.2.30.exe`.
+- [ ] Запустить свежий Windows installer `release\CamPlan-Installer-0.2.32.exe`.
 - [ ] Проверить, что UI открывается со стилями и без black screen.
 - [ ] Проверить, что приложение стартует в режиме `Просмотр`.
 - [ ] Переключиться в `Редактирование` и обратно.
@@ -79,7 +79,7 @@
 - [ ] Verify NSIS does not ask to close CCTV Manager during the confirmed update flow.
 - [ ] Verify the installation completes after the app quits and the detached installer starts.
 - [ ] Verify the custom NSIS check override does not prompt to close CamPlan when only the installer is running.
-- [ ] Verify the locally built `release\CamPlan-Installer-0.2.30.exe` before publishing the release.
+- [ ] Verify the locally built `release\CamPlan-Installer-0.2.32.exe` before publishing the release.
 - [ ] After a failed update, check `%TEMP%\CamPlanUpdateDebug.log`, `%TEMP%\CamPlanUpdateLauncher.cmd`, `%TEMP%\CamPlanUpdateLauncher.vbs`, and `%TEMP%\CamPlanUpdateError.log`.
 - [ ] Verify the downloaded installer path exists manually before the launcher runs.
 - [ ] Verify the launcher waits for `CamPlan.exe` to disappear by name, not by PID, before it starts the installer.
@@ -144,14 +144,14 @@
 ## Open project
 - [ ] Открыть JSON-проект через canvas и toolbar и проверить, что после успешного импорта не появляется modal alert `Проект открыт` или `Импорт выполнен`.
 - [ ] Verify that wall and room drawing starts exactly under the mouse pointer, without a visible offset, even when the plan canvas is scaled or letterboxed.
-- [ ] Verify `release\CamPlan-Installer-0.2.30.exe` installs and the manual update launcher still opens the installer once after the app exits.
+- [ ] Verify `release\CamPlan-Installer-0.2.32.exe` installs and the manual update launcher still opens the installer once after the app exits.
 - [ ] Open a project through central `+`, close CamPlan, reopen it, and verify the last project snapshot is restored instead of starting from an empty workspace.
 - [ ] Repeat the same restore check after opening a project through `File -> Open project`.
 - [ ] Repeat the same restore check after opening a project through the left sidebar `+`.
 - [ ] Restart twice in a row and verify the empty startup state did not overwrite the saved project snapshot.
-- [ ] Verify `release\CamPlan-Installer-0.2.30.exe` installs without the NSIS close/retry dialog `Не удалось закрыть CamPlan`.
-- [ ] Verify `release\CamPlan-Installer-0.2.31.exe` installs from `0.2.30` without any `РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РєСЂС‹С‚СЊ CamPlan` dialog and without waiting for hidden input.
-- [ ] Verify `release\CamPlan-Installer-0.2.31.exe` installs from `0.2.30` without any close-CamPlan dialog and without waiting for hidden input.
+- [ ] Verify `release\CamPlan-Installer-0.2.32.exe` installs without the NSIS close/retry dialog `Не удалось закрыть CamPlan`.
+- [ ] Verify `release\CamPlan-Installer-0.2.32.exe` installs from `0.2.31` without any `РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РєСЂС‹С‚СЊ CamPlan` dialog and without waiting for hidden input.
+- [ ] Verify `release\CamPlan-Installer-0.2.32.exe` installs from `0.2.31` without any close-CamPlan dialog and without waiting for hidden input.
 # Restore QA
 
 - [ ] Clear app data and start CamPlan with an empty workspace.
