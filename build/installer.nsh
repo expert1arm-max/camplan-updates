@@ -1,3 +1,3 @@
 !macro customCheckAppRunning
-  ; Update flow closes CamPlan before launching NSIS, so no extra process check is needed.
+  ; Update flow exits CamPlan before launching NSIS, so the installer must never try to close it again.
 !macroend

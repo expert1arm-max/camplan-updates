@@ -224,3 +224,4 @@
 - Plan canvas coordinate mapping now uses the SVG screen CTM instead of rect-based math, so wall and room drawing starts directly under the pointer even when the canvas is scaled or letterboxed.
 - Prepared `0.2.27` after the pointer-alignment fix, with the build version bumped and the release flow ready for GitHub publication.
 - Added an exit-time snapshot flush in the root shell so the last opened project is written again on `beforeunload`/`pagehide`, reducing the chance that closing the app drops the most recent project state.
+- Added a no-op `customCheckAppRunning` NSIS override so the installer no longer injects the close/retry running-app prompt; release version bumped to `0.2.28`.
