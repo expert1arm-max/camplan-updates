@@ -152,3 +152,13 @@
 - [ ] Verify `release\CamPlan-Installer-0.2.30.exe` installs without the NSIS close/retry dialog `Не удалось закрыть CamPlan`.
 - [ ] Verify `release\CamPlan-Installer-0.2.31.exe` installs from `0.2.30` without any `РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РєСЂС‹С‚СЊ CamPlan` dialog and without waiting for hidden input.
 - [ ] Verify `release\CamPlan-Installer-0.2.31.exe` installs from `0.2.30` without any close-CamPlan dialog and without waiting for hidden input.
+# Restore QA
+
+- [ ] Clear app data and start CamPlan with an empty workspace.
+- [ ] Open a JSON project through central `+` and confirm DevTools/localStorage logs show `IMPORT_APPLIED_TO_STORE`, `IMPORT_PERSISTED_INDEXEDDB`, and `IMPORT_PERSISTED_LOCALSTORAGE` with `objects.length > 0`.
+- [ ] Close CamPlan and reopen it once; confirm logs show `RESTORE_START`, `RESTORE_INDEXEDDB_RESULT`, `RESTORE_LOCALSTORAGE_RESULT`, `RESTORE_SELECTED_SOURCE`, and `RESTORE_APPLIED_TO_STORE`.
+- [ ] Confirm the last opened project appears automatically and the empty state is not shown first.
+- [ ] Repeat the same restore check through `File -> Open project`.
+- [ ] Repeat the same restore check through the left sidebar `+`.
+- [ ] Restart twice and confirm no empty autosave overwrote the valid project snapshot.
+- [ ] Confirm no write with `objects.length = 0` appears after a valid import unless the source is `new-project-confirmed`.

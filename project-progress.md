@@ -230,3 +230,10 @@
 - Built `0.2.30` locally as `release\CamPlan-Installer-0.2.30.exe`; the release binary and generated NSIS debug output no longer contain the close/retry prompt text.
 - Restore investigation is now instrumented with temporary QA logs around every storage read/write, explicit `hasHydratedFromStorage` gating, and an empty-snapshot overwrite guard that only allows `new-project-confirmed` to write a blank project.
 - Added a local `build/allowOnlyOneInstallerInstance.nsh` override to remove the remaining NSIS close/retry app-running dialog path; release build `0.2.31` is ready as `release\CamPlan-Installer-0.2.31.exe`.
+# 25.05.2026 restore instrumentation
+
+- Added explicit restore/persist QA logging in the storage layer.
+- Imported projects now save immediately to IndexedDB and the `localStorage` backup through a single `saveSnapshot(...)` path.
+- Startup now selects the freshest valid snapshot with `loadBestSnapshot()` and blocks empty overwrite until hydration completes.
+- Empty startup state is now logged with `EMPTY_STATE_REASON`, while import flow logs `IMPORT_APPLIED_TO_STORE`, `IMPORT_PERSISTED_INDEXEDDB`, and `IMPORT_PERSISTED_LOCALSTORAGE`.
+- Next verification step is manual QA of the three open/import entry points and two restart cycles to prove the last opened project is restored.

@@ -1,6 +1,7 @@
 ﻿import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type WheelEvent } from "react";
 import { Plus } from "lucide-react";
 import { deviceTypeLabels, statusColors, useStore } from "@/data/store";
+import { logQaEvent } from "@/data/repository";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type {
@@ -1104,6 +1105,7 @@ export function PlanCanvas({
     moveGroupBy,
     moveSelectedItemsBy,
     isHydrated,
+    emptyStateReason,
     updateUiState,
     importJSON,
   } = useStore();
@@ -2471,6 +2473,7 @@ export function PlanCanvas({
   const textDraftId = textDraft?.id ?? null;
   const showIpLabels = settings.uiState?.showIpLabels ?? false;
   const showEmptyProjectState = objects.length === 0;
+  const emptyStateLoggedRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!textDraftId) return;
@@ -2492,6 +2495,21 @@ export function PlanCanvas({
       setTextDraft(null);
     }
   }, [isEditMode, mode]);
+
+  useEffect(() => {
+    if (!isHydrated || !showEmptyProjectState) return;
+    const reason = emptyStateReason ?? "unknown";
+    if (reason === "no-valid-snapshot") return;
+    if (emptyStateLoggedRef.current === reason) return;
+    emptyStateLoggedRef.current = reason;
+    logQaEvent("EMPTY_STATE_REASON", null, {
+      caller: "PlanCanvas",
+      source: "store",
+      reason,
+      storageTarget: "store",
+      status: "shown",
+    });
+  }, [emptyStateReason, isHydrated, showEmptyProjectState]);
 
   useEffect(() => {
     if (

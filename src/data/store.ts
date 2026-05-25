@@ -20,7 +20,7 @@ import type {
   UiLayoutState,
   ViewBoxState,
 } from "@/types";
-import { loadAppData, normalizeAppData, saveAppData } from "./repository";
+import { loadBestSnapshot, logQaEvent, normalizeAppData, saveSnapshot } from "./repository";
 
 interface State extends AppData {
   activeObjectId: string | null;
@@ -33,10 +33,11 @@ interface State extends AppData {
   currentCableType: CableType;
   savedAt: number;
   isHydrated: boolean;
+  emptyStateReason: string | null;
   history: EditorSnapshot[];
   future: EditorSnapshot[];
 
-  hydrate: (data: AppData) => void;
+  hydrate: (data: AppData, emptyStateReason?: string | null) => void;
   hasHydratedFromStorage: boolean;
   setActiveFloor: (id: string | null) => void;
   focusObject: (id: string) => void;
@@ -101,6 +102,7 @@ interface State extends AppData {
 type EditorSnapshot = AppData & {
   activeObjectId: string | null;
   activeFloorId: string | null;
+  emptyStateReason: string | null;
   selectedId: string | null;
   selectedKind: SelectionKind | null;
   selectedItems: SelectionItem[];
@@ -125,7 +127,9 @@ function inferCallerName() {
     if (
       name === "inferCallerName" ||
       name === "persistSnapshot" ||
+      name === "saveSnapshot" ||
       name === "saveAppData" ||
+      name === "loadBestSnapshot" ||
       name === "mutate"
     ) {
       continue;
@@ -236,6 +240,7 @@ function snapshotState(state: State): EditorSnapshot {
     settings: state.settings,
     activeObjectId: state.activeObjectId,
     activeFloorId: state.activeFloorId,
+    emptyStateReason: state.emptyStateReason,
     selectedId: state.selectedId,
     selectedKind: state.selectedKind,
     selectedItems: state.selectedItems,
@@ -254,6 +259,7 @@ function restoreSnapshot(snapshot: EditorSnapshot) {
     settings: snapshot.settings,
     activeObjectId: snapshot.activeObjectId,
     activeFloorId: snapshot.activeFloorId,
+    emptyStateReason: snapshot.emptyStateReason,
     selectedId: snapshot.selectedId,
     selectedKind: snapshot.selectedKind,
     selectedItems: snapshot.selectedItems,
@@ -290,7 +296,7 @@ function persistSnapshot(state: State, reason = "autosave") {
     return;
   }
 
-  void saveAppData(selectData(state), {
+  void saveSnapshot(selectData(state), reason, {
     reason,
     caller: inferCallerName(),
     activeObjectId: state.activeObjectId,
@@ -301,7 +307,7 @@ function persistSnapshot(state: State, reason = "autosave") {
 export function flushCurrentSnapshot() {
   const state = useStore.getState();
   if (!state.isHydrated || !state.hasHydratedFromStorage) return;
-  void saveAppData(selectData(state), {
+  void saveSnapshot(selectData(state), "exit", {
     reason: "exit",
     caller: "flushCurrentSnapshot",
     activeObjectId: state.activeObjectId,
@@ -528,11 +534,12 @@ export const useStore = create<State>()((set, get) => ({
   currentCableType: "utp",
   savedAt: Date.now(),
   isHydrated: false,
+  emptyStateReason: null,
   hasHydratedFromStorage: false,
   history: [],
   future: [],
 
-  hydrate: (data) =>
+  hydrate: (data, emptyStateReason = null) =>
     set((state) => {
       const { objectId, floorId, settings } = resolveStartupFocus(data);
       return {
@@ -549,6 +556,7 @@ export const useStore = create<State>()((set, get) => ({
         currentCableType: "utp",
         savedAt: Date.now(),
         isHydrated: true,
+        emptyStateReason,
         hasHydratedFromStorage: true,
         history: [],
         future: [],
@@ -840,6 +848,7 @@ export const useStore = create<State>()((set, get) => ({
       floors: [...state.floors, firstFloor],
       activeObjectId: next.id,
       activeFloorId: firstFloor.id,
+      emptyStateReason: null,
       ...selectionState([]),
     }));
     return next.id;
@@ -885,6 +894,7 @@ export const useStore = create<State>()((set, get) => ({
         deviceConnections: remainingConnections,
         activeObjectId: nextObject?.id ?? null,
         activeFloorId: nextFloor?.id ?? null,
+        emptyStateReason: remainingObjects.length === 0 ? "object-deleted-last" : null,
         ...selectionState([]),
       };
     });
@@ -1213,6 +1223,7 @@ export const useStore = create<State>()((set, get) => ({
       ...initial,
       activeObjectId: null,
       activeFloorId: null,
+      emptyStateReason: "new-project-confirmed",
       selectedId: null,
       selectedKind: null,
       selectedItems: [],
@@ -1231,8 +1242,8 @@ export const useStore = create<State>()((set, get) => ({
   importJSON: async (data) => {
     const parsed = normalizeAppData(JSON.parse(data));
     const resolved = resolveStartupFocus(parsed);
-    await saveAppData(parsed, {
-      reason: "import",
+    await saveSnapshot(parsed, "import-project", {
+      reason: "import-project",
       caller: "importJSON",
       activeObjectId: resolved.objectId,
       activeFloorId: resolved.floorId,
@@ -1243,6 +1254,7 @@ export const useStore = create<State>()((set, get) => ({
       settings: resolved.settings,
       activeObjectId: resolved.objectId,
       activeFloorId: resolved.floorId,
+      emptyStateReason: null,
       ...selectionState([]),
       mode: "select",
       isEditMode: false,
@@ -1252,28 +1264,76 @@ export const useStore = create<State>()((set, get) => ({
       history: [],
       future: [],
     }));
+    const nextState = useStore.getState();
+    logQaEvent("IMPORT_APPLIED_TO_STORE", nextState, {
+      caller: "importJSON",
+      source: "import-project",
+      reason: "import-project",
+      storageTarget: "store",
+      status: "applied",
+      activeObjectId: nextState.activeObjectId,
+      activeFloorId: nextState.activeFloorId,
+    });
   },
 
   exportJSON: () => JSON.stringify(selectData(get()), null, 2),
 }));
 
 export async function bootstrapStore() {
-  console.info("restore:before hydration");
-  const data = await loadAppData();
-  if (data) {
-    useStore.getState().hydrate(data);
-    const resolved = resolveStartupFocus(data);
-    console.info(
-      `restore:final activeObjectId ${useStore.getState().activeObjectId ?? resolved.objectId ?? "null"} restore:final activeFloorId ${useStore.getState().activeFloorId ?? resolved.floorId ?? "null"}`,
-    );
+  logQaEvent("HYDRATION_START", null, {
+    caller: "bootstrapStore",
+    source: "bootstrap",
+    storageTarget: "store",
+    status: "before-hydration",
+  });
+
+  const latest = await loadBestSnapshot();
+  if (latest) {
+    const emptyStateReason = latest.source === "new-project-confirmed" ? "new-project-confirmed" : null;
+    useStore.getState().hydrate(latest.snapshot, emptyStateReason);
+    const resolved = resolveStartupFocus(latest.snapshot);
+    const state = useStore.getState();
+    logQaEvent("RESTORE_APPLIED_TO_STORE", latest.snapshot, {
+      caller: "bootstrapStore",
+      source: latest.storageTarget,
+      reason: latest.source,
+      storageTarget: "store",
+      status: "applied",
+      activeObjectId: state.activeObjectId ?? resolved.objectId ?? null,
+      activeFloorId: state.activeFloorId ?? resolved.floorId ?? null,
+    });
+    logQaEvent("HYDRATION_COMPLETE", latest.snapshot, {
+      caller: "bootstrapStore",
+      source: latest.storageTarget,
+      reason: latest.source,
+      storageTarget: "store",
+      status: "complete",
+      activeObjectId: state.activeObjectId ?? resolved.objectId ?? null,
+      activeFloorId: state.activeFloorId ?? resolved.floorId ?? null,
+    });
     if (resolved.changed) {
       persistSnapshot(useStore.getState(), "restore");
     }
     return;
   }
 
-  useStore.getState().hydrate(initial);
-  console.info("restore:final activeObjectId null restore:final activeFloorId null");
+  useStore.getState().hydrate(initial, "no-valid-snapshot");
+  logQaEvent("EMPTY_STATE_REASON", null, {
+    caller: "bootstrapStore",
+    source: "bootstrap",
+    reason: "no-valid-snapshot",
+    storageTarget: "store",
+    status: "empty",
+  });
+  logQaEvent("HYDRATION_COMPLETE", null, {
+    caller: "bootstrapStore",
+    source: "bootstrap",
+    reason: "no-valid-snapshot",
+    storageTarget: "store",
+    status: "complete",
+    activeObjectId: null,
+    activeFloorId: null,
+  });
 }
 
 export const statusLabels: Record<DeviceStatus, string> = {
