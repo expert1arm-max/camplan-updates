@@ -3,25 +3,25 @@
 ## Electron
 - `electron/main.cjs`
 - `electron/preload.cjs`
-- Р‘РµР·РѕРїР°СЃРЅС‹Р№ `BrowserWindow` СЃ `contextIsolation`, РѕС‚РєР»СЋС‡РµРЅРЅС‹Рј `nodeIntegration` Рё `sandbox`.
-- Native file dialogs РґР»СЏ РѕС‚РєСЂС‹С‚РёСЏ JSON Рё СЃРѕС…СЂР°РЅРµРЅРёСЏ JSON/CSV/JPG.
+- Безопасный `BrowserWindow` с `contextIsolation`, отключенным `nodeIntegration` и `sandbox`.
+- Native file dialogs для открытия JSON и сохранения JSON/CSV/JPG.
 
 ## Storage
-- IndexedDB РІ renderer.
-- Р›РѕРєР°Р»СЊРЅРѕ СЃРѕС…СЂР°РЅСЏРµС‚СЃСЏ РїРѕР»РЅС‹Р№ `AppData` snapshot.
-- `localStorage` РЅРµ РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РєР°Рє РѕСЃРЅРѕРІРЅРѕРµ С…СЂР°РЅРёР»РёС‰Рµ.
+- IndexedDB в renderer.
+- Локально сохраняется полный `AppData` snapshot.
+- `localStorage` не используется как основное хранилище.
 - `localStorage` stores a backup copy of the latest snapshot, and startup now compares it with IndexedDB so the freshest persisted snapshot is restored.
 
 ## Import / export
-- JSON import/export РґР»СЏ РїРѕР»РЅРѕРіРѕ snapshot РїСЂРѕРµРєС‚Р°.
-- CSV export РґР»СЏ С‚Р°Р±Р»РёС†С‹ РІСЃРµС… СѓСЃС‚СЂРѕР№СЃС‚РІ.
-- JPG export С‚РµРєСѓС‰РµРіРѕ РїР»Р°РЅР° С‡РµСЂРµР· SVG-to-canvas.
-- Import РїРѕРґРґРµСЂР¶РёРІР°РµС‚ legacy-РїРѕР»СЏ: `cameras`, `deviceCables`, `connections`.
+- JSON import/export для полного snapshot проекта.
+- CSV export для таблицы всех устройств.
+- JPG export текущего плана через SVG-to-canvas.
+- Import поддерживает legacy-поля: `cameras`, `deviceCables`, `connections`.
 
 ## Packaging
-- `npm run build` СЃРѕР±РёСЂР°РµС‚ frontend.
-- `npm run dist:win` СЃРѕР±РёСЂР°РµС‚ Windows installer.
-- Current packaged installer version is `0.2.30`.
+- `npm run build` собирает frontend.
+- `npm run dist:win` собирает Windows installer.
+- Current packaged installer version is `0.2.32`.
 
 ## GitHub Releases
 - Release automation uses GitHub Actions.
@@ -39,7 +39,7 @@
 - The update launcher no longer uses PowerShell or fallback launch paths; the hidden WScript + CMD pair is the only launch path.
 - A custom `build/installer.nsh` override replaces the default app-running check with a no-op because the update flow already closes CamPlan before NSIS starts.
 - The current electron-builder schema does not accept a `closeRunningApp` NSIS option, so the no-op `build/installer.nsh` remains the actual guard that prevents the installer from trying to close CamPlan again.
-- The close/retry prompt text `РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РєСЂС‹С‚СЊ CamPlan` came from the stock `installUtil.nsh` old-version uninstall loop, so the project now carries a local `build/installUtil.nsh` override to remove that blocking dialog entirely.
+- The close/retry prompt text `Не удалось закрыть CamPlan` came from the stock `installUtil.nsh` old-version uninstall loop, so the project now carries a local `build/installUtil.nsh` override to remove that blocking dialog entirely.
 - The update launcher scripts are written with `fs.writeFileSync` before any window teardown, and the WScript spawn is only attempted after both files exist on disk; the app closes only after the launcher is successfully spawned.
 - The hidden WScript helper is spawned during QA and the existing debug/error logs still capture missing-installer details if the file cannot be found.
 - Restore persistence now writes the imported/edited snapshot to both IndexedDB and `localStorage`, records `savedAt`/`updatedAt` plus active object/floor metadata, and startup chooses the freshest non-empty snapshot so an empty project cannot overwrite a valid one on reopen.
