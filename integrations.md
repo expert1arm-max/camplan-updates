@@ -7,6 +7,7 @@
 - Native file dialogs для открытия JSON и сохранения JSON/CSV/JPG.
 - `dialog:open-json` отдаёт renderer-у содержимое и абсолютный путь файла, чтобы открытый проект можно было сохранить обратно в тот же JSON.
 - При закрытии окна Electron запрашивает у renderer-а dirty-состояние открытого JSON и показывает native confirmation перед фактическим закрытием.
+- Packaged runtime uses the privileged `camplan://app/` protocol instead of a random `127.0.0.1:<port>` server, so IndexedDB/localStorage keep the same origin between app launches.
 
 ## Storage
 - IndexedDB в renderer.
@@ -23,7 +24,7 @@
 ## Packaging
 - `npm run build` собирает frontend.
 - `npm run dist:win` собирает Windows installer.
-- Current packaged installer version is `0.2.34`.
+- Current packaged installer version is `0.2.35`.
 
 ## GitHub Releases
 - Release automation uses GitHub Actions.

@@ -1,5 +1,5 @@
 ﻿const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require("electron");
-const http = require("node:http");
+const { protocol } = require("electron");
 const { spawn } = require("node:child_process");
 const os = require("node:os");
 const path = require("node:path");
@@ -11,7 +11,7 @@ const fs = require("fs/promises");
 
 const isDev = !app.isPackaged;
 const devUrl = process.env.VITE_DEV_SERVER_URL || "http://127.0.0.1:5173";
-const localUserDataDir = path.resolve(process.cwd(), ".electron-data");
+const localUserDataDir = isDev ? path.resolve(process.cwd(), ".electron-data") : null;
 const githubReleaseRepoFallback = {
   owner: "expert1arm-max",
   repo: "camplan-updates",
@@ -20,8 +20,9 @@ const updateDebugLogPath = path.join(os.tmpdir(), "CamPlanUpdateDebug.log");
 const updateErrorLogPath = path.join(os.tmpdir(), "CamPlanUpdateError.log");
 const updateLauncherCmdPath = path.join(os.tmpdir(), "CamPlanUpdateLauncher.cmd");
 const updateLauncherVbsPath = path.join(os.tmpdir(), "CamPlanUpdateLauncher.vbs");
-let server;
 let mainWindow;
+let productionProtocolReady = false;
+let productionWorkerPromise = null;
 let pendingDownloadedInstaller = null;
 let allowWindowClose = false;
 let closeRequestInFlight = false;
@@ -32,13 +33,30 @@ app.commandLine.appendSwitch("disable-gpu-compositing");
 app.commandLine.appendSwitch("disable-gpu-sandbox");
 app.commandLine.appendSwitch("in-process-gpu");
 app.commandLine.appendSwitch("use-angle", "swiftshader");
-app.commandLine.appendSwitch("user-data-dir", localUserDataDir);
-app.commandLine.appendSwitch("disk-cache-dir", path.join(localUserDataDir, "Cache"));
+if (isDev && localUserDataDir) {
+  app.commandLine.appendSwitch("user-data-dir", localUserDataDir);
+  app.commandLine.appendSwitch("disk-cache-dir", path.join(localUserDataDir, "Cache"));
+}
 app.disableHardwareAcceleration();
-app.setPath("appData", path.join(localUserDataDir, "AppData"));
-app.setPath("userData", localUserDataDir);
-app.setPath("sessionData", path.join(localUserDataDir, "Session Data"));
-app.setPath("cache", path.join(localUserDataDir, "Cache"));
+if (isDev && localUserDataDir) {
+  app.setPath("appData", path.join(localUserDataDir, "AppData"));
+  app.setPath("userData", localUserDataDir);
+  app.setPath("sessionData", path.join(localUserDataDir, "Session Data"));
+  app.setPath("cache", path.join(localUserDataDir, "Cache"));
+}
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "camplan",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+    },
+  },
+]);
 
 function getMimeType(filePath) {
   if (filePath.endsWith(".css")) return "text/css; charset=utf-8";
@@ -54,26 +72,25 @@ function getMimeType(filePath) {
   return "application/octet-stream";
 }
 
-async function startProductionServer() {
-  const serverEntryPath = path.join(app.getAppPath(), "dist", "server", "index.js");
+async function getProductionWorker() {
+  if (!productionWorkerPromise) {
+    const serverEntryPath = path.join(app.getAppPath(), "dist", "server", "index.js");
+    productionWorkerPromise = import(pathToFileURL(serverEntryPath).href).then((mod) => mod.default);
+  }
+
+  return productionWorkerPromise;
+}
+
+async function setupProductionProtocol() {
+  if (productionProtocolReady) {
+    return;
+  }
+
   const clientDir = path.join(app.getAppPath(), "dist", "client");
-  const mod = await import(pathToFileURL(serverEntryPath).href);
-  const worker = mod.default;
 
-  server = http.createServer(async (req, res) => {
+  protocol.handle("camplan", async (request) => {
     try {
-      const origin = `http://${req.headers.host || "127.0.0.1"}`;
-      const url = new URL(req.url || "/", origin);
-      const headers = new Headers();
-
-      for (const [key, value] of Object.entries(req.headers)) {
-        if (typeof value === "string") {
-          headers.set(key, value);
-        } else if (Array.isArray(value)) {
-          headers.set(key, value.join(", "));
-        }
-      }
-
+      const url = new URL(request.url);
       const pathname = url.pathname;
 
       if (pathname.startsWith("/assets/") || pathname === "/.assetsignore") {
@@ -81,45 +98,25 @@ async function startProductionServer() {
 
         try {
           const buffer = await fs.readFile(assetPath);
-          res.statusCode = 200;
-          res.setHeader("content-type", getMimeType(assetPath));
-          res.end(buffer);
-          return;
+          return new Response(buffer, {
+            status: 200,
+            headers: { "content-type": getMimeType(assetPath) },
+          });
         } catch {
-          res.statusCode = 404;
-          res.end("Not found");
-          return;
+          return new Response("Not found", { status: 404 });
         }
       }
 
-      const request = new Request(url, {
-        method: req.method,
-        headers,
-      });
-
-      const response = await worker.fetch(request, {}, { waitUntil() {} });
-
-      res.statusCode = response.status;
-      response.headers.forEach((value, key) => res.setHeader(key, value));
-
-      if (!response.body) {
-        res.end();
-        return;
-      }
-
-      const buffer = Buffer.from(await response.arrayBuffer());
-      res.end(buffer);
+      const worker = await getProductionWorker();
+      return worker.fetch(request, {}, { waitUntil() {} });
     } catch (error) {
-      res.statusCode = 500;
-      res.end(error instanceof Error ? error.stack || error.message : "Unknown error");
+      return new Response(error instanceof Error ? error.stack || error.message : "Unknown error", {
+        status: 500,
+      });
     }
   });
 
-  await new Promise((resolve) => {
-    server.listen(0, "127.0.0.1", resolve);
-  });
-
-  return server.address().port;
+  productionProtocolReady = true;
 }
 
 async function createWindow() {
@@ -165,8 +162,7 @@ async function createWindow() {
   }
 
   win.setMenuBarVisibility(false);
-  const port = await startProductionServer();
-  await win.loadURL(`http://127.0.0.1:${port}`);
+  await win.loadURL("camplan://app/");
 }
 
 function sendUpdateEvent(payload) {
@@ -542,8 +538,12 @@ async function downloadReleaseAsset(asset, version) {
 
 app.setAppUserModelId("com.camplan.cctvmanager");
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
+
+  if (!isDev) {
+    await setupProductionProtocol();
+  }
 
   ipcMain.handle("app:get-version", () => app.getVersion());
   ipcMain.handle("app:get-latest-release-version", async () => fetchLatestGithubRelease());

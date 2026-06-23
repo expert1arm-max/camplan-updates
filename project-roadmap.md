@@ -190,4 +190,4 @@ MVP desktop-версии реализован. Сейчас проект нах�
 - Keep the hydration guard in place so empty startup state cannot overwrite a valid saved project.
 - Confirm QA logs in DevTools/localStorage show the import and restore path end-to-end.
 - Verify the new `wifi_router` device type appears in the toolbar, can be placed on the plan, shows the expected properties, and survives JSON import/export.
-- Publish release `0.2.34` with the opened-project close save prompt, then manually verify update from `0.2.33` to `0.2.34`.
+- Publish release `0.2.35` with stable `camplan://app/` packaged origin, then manually verify installed-build restore by opening a JSON project, closing CamPlan, and reopening it.

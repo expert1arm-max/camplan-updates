@@ -11,6 +11,8 @@
 - Renderer uses safe IPC only for file dialogs.
 - `dialog:open-json` returns both file contents and the absolute path, so the renderer can track the currently opened project file.
 - Window close is mediated by `app:close-request` / `app:close-response`: the renderer reports whether the opened JSON file is dirty, and Electron main shows the native save confirmation before closing.
+- In packaged builds the renderer loads from the stable custom origin `camplan://app/`; dev still loads from Vite at `http://127.0.0.1:5173`.
+- The packaged app must not use a random localhost port, because IndexedDB/localStorage are origin-scoped and a changing port creates a fresh empty storage on every launch.
 
 ## Data layer
 - IndexedDB stores the app snapshot locally.

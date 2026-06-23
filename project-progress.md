@@ -235,6 +235,7 @@
 - Updated the `switch` toolbar icon to `EthernetPort` so it no longer visually matches `wifi_router`, and prepared release `0.2.33`.
 - Opening a JSON project through the Electron file dialog now remembers the source file path; if the project changes and the user closes the window, CamPlan asks whether to save changes back into that opened file before closing.
 - Prepared release `0.2.34` with the opened-project close save prompt and package-lock version alignment.
+- Fixed the packaged startup restore root cause by replacing the random localhost production origin with stable `camplan://app/`; release `0.2.35` is being prepared so installed builds reuse the same IndexedDB/localStorage origin on every launch.
 # 25.05.2026 restore instrumentation
 
 - Added explicit restore/persist QA logging in the storage layer.
