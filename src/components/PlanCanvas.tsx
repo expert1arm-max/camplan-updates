@@ -84,6 +84,7 @@ const deviceSizes: Record<DeviceType, { width: number; height: number }> = {
   dvr: { width: 64, height: 36 },
   switch: { width: 72, height: 30 },
   poe_switch: { width: 72, height: 30 },
+  wifi_router: { width: 72, height: 30 },
 };
 
 const cableLabels: Record<CableType, string> = {
@@ -1522,6 +1523,17 @@ export function PlanCanvas({
       });
     }
 
+    if (mode === "wifi_router") {
+      return addDevice({
+        ...base,
+        type: "wifi_router",
+        name: "Новый Wi-Fi роутер",
+        portCount: 4,
+        uplinkPorts: 1,
+        connectedDeviceIds: [],
+      });
+    }
+
     return null;
   };
 
@@ -2093,7 +2105,8 @@ export function PlanCanvas({
       mode === "nvr" ||
       mode === "dvr" ||
       mode === "switch" ||
-      mode === "poe_switch"
+      mode === "poe_switch" ||
+      mode === "wifi_router"
     ) {
       const id = createDeviceByMode(pt);
       if (id) {
@@ -2883,8 +2896,17 @@ export function PlanCanvas({
           ? "DVR"
           : device.type === "poe_switch"
             ? "PoE"
+            : device.type === "wifi_router"
+              ? "WiFi"
             : "SW";
-    const innerLabel = device.type === "poe_switch" ? "P" : device.type === "switch" ? "S" : "D";
+    const innerLabel =
+      device.type === "poe_switch"
+        ? "P"
+        : device.type === "wifi_router"
+          ? "R"
+          : device.type === "switch"
+            ? "S"
+            : "D";
 
     return (
       <g key={device.id}>

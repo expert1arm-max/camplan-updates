@@ -142,6 +142,7 @@ const toolGroups: { title: string; items: { mode: EditorMode; icon: typeof Squar
         { mode: "dvr", icon: Network, label: "DVR" },
         { mode: "switch", icon: Wifi, label: "Switch" },
         { mode: "poe_switch", icon: Zap, label: "PoE Switch" },
+        { mode: "wifi_router", icon: Wifi, label: "Wi‑Fi роутер" },
       ],
     },
   ];

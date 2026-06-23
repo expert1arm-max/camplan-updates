@@ -608,9 +608,40 @@ function normalizeElement(input: unknown): MapElement {
 }
 
 function normalizeDeviceType(value: unknown): DeviceType {
-  return value === "nvr" || value === "dvr" || value === "switch" || value === "poe_switch"
-    ? value
-    : "camera";
+  if (
+    value === "nvr" ||
+    value === "dvr" ||
+    value === "switch" ||
+    value === "poe_switch" ||
+    value === "wifi_router"
+  ) {
+    return value;
+  }
+
+  if (value === "router" || value === "wifi-router" || value === "wifi router") {
+    return "wifi_router";
+  }
+
+  return "camera";
+}
+
+function defaultDeviceName(type: DeviceType) {
+  switch (type) {
+    case "camera":
+      return "Новая камера";
+    case "nvr":
+      return "Новый NVR";
+    case "dvr":
+      return "Новый DVR";
+    case "switch":
+      return "Новый Switch";
+    case "poe_switch":
+      return "Новый PoE Switch";
+    case "wifi_router":
+      return "Новый Wi-Fi роутер";
+    default:
+      return "Новое устройство";
+  }
 }
 
 function normalizePoints(value: unknown): CablePoint[] {
@@ -648,7 +679,7 @@ function normalizeDevice(input: unknown): Device {
     floorId: asString(record.floorId, ""),
     objectId: asString(record.objectId ?? record.siteObjectId, ""),
     type,
-    name: asString(record.name, type === "camera" ? "Новая камера" : "Новое устройство"),
+    name: asString(record.name, defaultDeviceName(type)),
     ip: asString(record.ip, ""),
     username: asString(record.username ?? record.login, "admin"),
     password: asString(record.password, ""),

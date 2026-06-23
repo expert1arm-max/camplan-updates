@@ -2,7 +2,7 @@ export type DeviceStatus = "working" | "offline" | "needs_check" | "reserve" | "
 
 export type CameraStatus = DeviceStatus;
 
-export type DeviceType = "camera" | "nvr" | "dvr" | "switch" | "poe_switch";
+export type DeviceType = "camera" | "nvr" | "dvr" | "switch" | "poe_switch" | "wifi_router";
 
 export type SelectionKind = "object" | "device" | "element" | "connection";
 
@@ -174,5 +174,6 @@ export type EditorMode =
   | "dvr"
   | "switch"
   | "poe_switch"
+  | "wifi_router"
   | "connector"
   | "delete";

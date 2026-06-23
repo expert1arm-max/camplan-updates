@@ -164,3 +164,4 @@
 - [ ] Repeat the same restore check through the left sidebar `+`.
 - [ ] Restart twice and confirm no empty autosave overwrote the valid project snapshot.
 - [ ] Confirm no write with `objects.length = 0` appears after a valid import unless the source is `new-project-confirmed`.
+- [ ] Verify the `Wi-Fi router` device can be created from the toolbar, edited in the properties panel, and restored after restart.

@@ -354,6 +354,7 @@ const repairedTextByMojibake = new Map<string, string>([
   ["\u0420\u045c\u0420\u0455\u0420\u0406\u0421\u2039\u0420\u2116 DVR", "Новый DVR"],
   ["\u0420\u045c\u0420\u0455\u0420\u0406\u0421\u2039\u0420\u2116 Switch", "Новый Switch"],
   ["\u0420\u045c\u0420\u0455\u0420\u0406\u0421\u2039\u0420\u2116 PoE Switch", "Новый PoE Switch"],
+  ["\u0420\u045c\u0420\u0455\u0420\u0406\u0421\u2039\u0420\u2116 Wi-Fi router", "Новый Wi-Fi роутер"],
   [
     "\u0420\u045f\u0420\u0455\u0420\u0458\u0420\u00b5\u0421\u2030\u0420\u00b5\u0420\u0405\u0420\u0451\u0420\u00b5",
     "Помещение",
@@ -540,6 +541,7 @@ export const deviceTypeLabels: Record<DeviceType, string> = {
   dvr: "DVR",
   switch: "Switch",
   poe_switch: "PoE Switch",
+  wifi_router: "Wi-Fi router",
 };
 
 export const useStore = create<State>()((set, get) => ({

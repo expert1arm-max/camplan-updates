@@ -24,7 +24,7 @@ import { Slider } from "@/components/ui/slider";
 import { getTextElementBounds } from "@/utils/text-element";
 
 const statuses: DeviceStatus[] = ["working", "offline", "needs_check", "reserve", "no_access"];
-const deviceTypes: DeviceType[] = ["camera", "nvr", "dvr", "switch", "poe_switch"];
+const deviceTypes: DeviceType[] = ["camera", "nvr", "dvr", "switch", "poe_switch", "wifi_router"];
 const cableLabels: Record<CableType, string> = {
   utp: "UTP",
   ftp: "FTP",
@@ -675,7 +675,7 @@ function DevicePanel({
 
   const connectionTypeForTarget = (target: Device): CableType => {
     if (device.type === "poe_switch") return target.type === "camera" ? "power" : "utp";
-    if (device.type === "switch") return "utp";
+    if (device.type === "switch" || device.type === "wifi_router") return "utp";
     if (device.type === "nvr" || device.type === "dvr")
       return target.type === "camera" ? "coaxial" : "utp";
     return "utp";
@@ -933,7 +933,9 @@ function DevicePanel({
                 onToggleConnection={onToggleConnection}
                 connectionTypeResolver={connectionTypeForTarget}
               />
-            ) : device.type === "switch" || device.type === "poe_switch" ? (
+            ) : device.type === "switch" ||
+              device.type === "poe_switch" ||
+              device.type === "wifi_router" ? (
               <ConnectionList
                 title="Подключённые устройства"
                 candidates={candidates}
@@ -1025,7 +1027,7 @@ function DevicePanel({
           </div>
         ) : null}
 
-        {device.type === "switch" || device.type === "poe_switch" ? (
+        {device.type === "switch" || device.type === "poe_switch" || device.type === "wifi_router" ? (
           <div className="pt-2 border-t space-y-3">
             <div className="font-semibold text-foreground">Сеть</div>
             <Field label="Количество портов">

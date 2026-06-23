@@ -187,3 +187,4 @@ MVP desktop-версии реализован. Сейчас проект нах�
 - Verify the same non-empty snapshot survives import, shutdown, and restart for all open/import entry points.
 - Keep the hydration guard in place so empty startup state cannot overwrite a valid saved project.
 - Confirm QA logs in DevTools/localStorage show the import and restore path end-to-end.
+- Verify the new `wifi_router` device type appears in the toolbar, can be placed on the plan, shows the expected properties, and survives JSON import/export.
