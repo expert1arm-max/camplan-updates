@@ -12,6 +12,12 @@ contextBridge.exposeInMainWorld("cctvDesktop", {
     ipcRenderer.on("app:update-event", listener);
     return () => ipcRenderer.removeListener("app:update-event", listener);
   },
+  onCloseRequest: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("app:close-request", listener);
+    return () => ipcRenderer.removeListener("app:close-request", listener);
+  },
+  respondToCloseRequest: (payload) => ipcRenderer.invoke("app:close-response", payload),
   openJsonFile: () => ipcRenderer.invoke("dialog:open-json"),
   openExternal: (url) => ipcRenderer.invoke("shell:open-external", url),
   saveTextFile: (payload) => ipcRenderer.invoke("dialog:save-text", payload),

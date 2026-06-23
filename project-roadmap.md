@@ -7,6 +7,7 @@ MVP desktop-версии реализован. Сейчас проект нах�
 ## Сейчас
 - Verify startup restores the last project by selecting the freshest persisted snapshot between IndexedDB and the `localStorage` backup, instead of trusting backup storage first.
 - Verify startup hydration does not allow the initial empty state to autosave before restore completes, using explicit `isRestoring` and `hasLoadedInitialSnapshot` guards.
+- Verify closing a modified project opened from a JSON file shows the native save prompt and saves back into the same file when confirmed.
 - Verify Save Project, JPG export, and CSV export stay disabled while the project is empty and become active only after content exists.
 - Verify the restore flow persists imported JSON immediately to both IndexedDB and `localStorage`, and that an empty startup snapshot never overwrites a valid saved project.
 - Use temporary QA logs to prove which storage write path emits an empty snapshot after import, then keep only the guard that blocks empty overwrite unless the action was an explicit `new-project-confirmed`.
@@ -82,6 +83,7 @@ MVP desktop-версии реализован. Сейчас проект нах�
 - проверка нового порядка полей камеры и поведения blank-click при pinned правой панели.
 - проверка, что нижний `Поворот` у камеры виден в режиме просмотра и контент реально доскролливается до конца.
 - проверить restore flow: открыть JSON через любой путь, закрыть CamPlan, открыть снова и убедиться, что поднимается последний проект, а пустой старт не затирает snapshot; затем убедиться по логам, что после успешного import не было write с `objects.length = 0`.
+- проверить close prompt: открыть JSON через Electron file dialog, изменить проект, закрыть окно, выбрать `Сохранить`, затем открыть CamPlan снова и убедиться, что поднимается последний проект.
 
 ## После QA
 

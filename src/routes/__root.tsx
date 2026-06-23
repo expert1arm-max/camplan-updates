@@ -125,6 +125,25 @@ function RootComponent() {
   }, []);
 
   useEffect(() => {
+    const bridge = window.cctvDesktop;
+    if (!bridge?.onCloseRequest || !bridge.respondToCloseRequest) return undefined;
+
+    return bridge.onCloseRequest(() => {
+      const state = useStore.getState();
+      const hasUnsavedProjectFileChanges =
+        Boolean(state.projectFilePath) &&
+        state.projectFileSavedAt !== null &&
+        state.savedAt > state.projectFileSavedAt;
+
+      void bridge.respondToCloseRequest({
+        hasUnsavedChanges: hasUnsavedProjectFileChanges,
+        filePath: state.projectFilePath,
+        content: state.exportJSON(),
+      });
+    });
+  }, []);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target;
       const isEditable =

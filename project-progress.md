@@ -233,6 +233,7 @@
 - Startup restore now also blocks persistence until `isRestoring` is false and `hasLoadedInitialSnapshot` is true, so the empty default state cannot win the startup race.
 - Added a new device type `wifi_router` across the type model, toolbar, canvas rendering, properties panel, and import normalization so Wi-Fi routers can be created and restored like other devices.
 - Updated the `switch` toolbar icon to `EthernetPort` so it no longer visually matches `wifi_router`, and prepared release `0.2.33`.
+- Opening a JSON project through the Electron file dialog now remembers the source file path; if the project changes and the user closes the window, CamPlan asks whether to save changes back into that opened file before closing.
 # 25.05.2026 restore instrumentation
 
 - Added explicit restore/persist QA logging in the storage layer.

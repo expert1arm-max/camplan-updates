@@ -96,18 +96,22 @@ declare global {
         message: string;
       }>;
       onUpdateEvent: (callback: (event: UpdateEvent) => void) => () => void;
-      openJsonFile: () => Promise<string | null>;
+      openJsonFile: () => Promise<CctvOpenJsonFileResult | null>;
       openExternal: (url: string) => Promise<boolean>;
       saveTextFile: (payload: {
         defaultPath: string;
         content: string;
         filters: { name: string; extensions: string[] }[];
-      }) => Promise<boolean>;
+      }) => Promise<CctvSaveFileResult>;
       saveBinaryFile: (payload: {
         defaultPath: string;
         dataUrl: string;
         filters: { name: string; extensions: string[] }[];
-      }) => Promise<boolean>;
+      }) => Promise<CctvSaveFileResult>;
+      onCloseRequest: (callback: (payload: CctvCloseRequestPayload) => void) => () => void;
+      respondToCloseRequest: (
+        payload: CctvCloseResponsePayload,
+      ) => Promise<CctvCloseResponseResult>;
     };
   }
 }
@@ -195,6 +199,7 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
     newProject,
     exportJSON,
     importJSON,
+    markProjectFileSaved,
   } = useStore();
   const fileRef = useRef<HTMLInputElement>(null);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -294,8 +299,8 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
   ) => {
     const bridge = window.cctvDesktop;
     if (bridge) {
-      await bridge.saveTextFile({ defaultPath, content, filters });
-      return;
+      const result = await bridge.saveTextFile({ defaultPath, content, filters });
+      return result.ok ? (result.filePath ?? null) : null;
     }
 
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
@@ -305,6 +310,7 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
     a.download = defaultPath;
     a.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    return null;
   };
 
   const handleExportJson = async () => {
@@ -312,9 +318,12 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
       return;
     }
 
-    await saveFile(`cctv-export-${Date.now()}.json`, exportJSON(), [
+    const filePath = await saveFile(`cctv-export-${Date.now()}.json`, exportJSON(), [
       { name: "JSON", extensions: ["json"] },
     ]);
+    if (filePath) {
+      markProjectFileSaved(filePath);
+    }
   };
 
   const handleExportCsv = async () => {
@@ -390,10 +399,10 @@ export function Toolbar({ search, setSearch }: { search: string; setSearch: (s: 
   const handleImport = async () => {
     const bridge = window.cctvDesktop;
     if (bridge) {
-      const text = await bridge.openJsonFile();
-      if (text) {
+      const result = await bridge.openJsonFile();
+      if (result) {
         try {
-          await importJSON(text);
+          await importJSON(result.content, result.filePath);
         } catch {
           console.error("Ошибка импорта");
         }

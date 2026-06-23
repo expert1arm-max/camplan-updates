@@ -122,6 +122,10 @@
 ## Import / export
 - [ ] Сохранить проект через `Файл -> Сохранить проект`.
 - [ ] Открыть проект через `Файл -> Открыть проект`.
+- [ ] Open a JSON project through the Electron file dialog, change it, close the window, and verify the native save prompt appears.
+- [ ] In the close prompt choose Save and verify changes are written back to the same JSON file.
+- [ ] Repeat the close prompt and choose Do not save; the window should close without writing to the file.
+- [ ] Repeat the close prompt and choose Cancel; CamPlan should remain open.
 - [ ] Экспортировать JPG через `Файл -> Экспорт JPG`.
 - [ ] Экспортировать CSV через `Файл -> Экспорт CSV`.
 - [ ] Импортировать legacy JSON с `cameras`, если есть тестовый файл.
@@ -150,6 +154,7 @@
 - [ ] Repeat the same restore check after opening a project through the left sidebar `+`.
 - [ ] Restart twice in a row and verify the empty startup state did not overwrite the saved project snapshot.
 - [ ] Verify `release\CamPlan-Installer-0.2.32.exe` installs without the NSIS close/retry dialog `Не удалось закрыть CamPlan`.
+- [ ] After saving through the close prompt, reopen CamPlan and verify the last project is restored automatically from IndexedDB/localStorage without manually opening JSON again.
 - [ ] Verify `release\CamPlan-Installer-0.2.32.exe` installs from `0.2.31` without any `РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РєСЂС‹С‚СЊ CamPlan` dialog and without waiting for hidden input.
 - [ ] Verify `release\CamPlan-Installer-0.2.32.exe` installs from `0.2.31` without any close-CamPlan dialog and without waiting for hidden input.
 # Restore QA

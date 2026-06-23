@@ -32,6 +32,8 @@ interface State extends AppData {
   isEditMode: boolean;
   currentCableType: CableType;
   savedAt: number;
+  projectFilePath: string | null;
+  projectFileSavedAt: number | null;
   isHydrated: boolean;
   isRestoring: boolean;
   hasLoadedInitialSnapshot: boolean;
@@ -97,8 +99,9 @@ interface State extends AppData {
   updateSettings: (patch: Partial<AppSettings>) => void;
   updateUiState: (patch: Partial<UiLayoutState>) => void;
   newProject: () => void;
-  importJSON: (data: string) => Promise<void>;
+  importJSON: (data: string, filePath?: string | null) => Promise<void>;
   exportJSON: () => string;
+  markProjectFileSaved: (filePath?: string | null) => void;
 }
 
 type EditorSnapshot = AppData & {
@@ -555,6 +558,8 @@ export const useStore = create<State>()((set, get) => ({
   isEditMode: false,
   currentCableType: "utp",
   savedAt: Date.now(),
+  projectFilePath: null,
+  projectFileSavedAt: null,
   isHydrated: false,
   isRestoring: false,
   hasLoadedInitialSnapshot: false,
@@ -579,6 +584,8 @@ export const useStore = create<State>()((set, get) => ({
         isEditMode: false,
         currentCableType: "utp",
         savedAt: Date.now(),
+        projectFilePath: null,
+        projectFileSavedAt: null,
         isHydrated: true,
         isRestoring: false,
         hasLoadedInitialSnapshot: true,
@@ -1257,6 +1264,8 @@ export const useStore = create<State>()((set, get) => ({
       isEditMode: false,
       currentCableType: "utp",
       savedAt: Date.now(),
+      projectFilePath: null,
+      projectFileSavedAt: null,
       isHydrated: true,
       isRestoring: false,
       hasLoadedInitialSnapshot: true,
@@ -1267,10 +1276,13 @@ export const useStore = create<State>()((set, get) => ({
     persistSnapshot(get(), "new-project-confirmed");
   },
 
-  importJSON: async (data) => {
+  importJSON: async (data, filePath = null) => {
     const parsed = normalizeAppData(JSON.parse(data));
     const resolved = resolveStartupFocus(parsed);
-    await saveSnapshot(parsed, "import-project", {
+    const snapshotWithFocus = { ...parsed, settings: resolved.settings };
+    const now = Date.now();
+    const openedFilePath = filePath ?? null;
+    await saveSnapshot(snapshotWithFocus, "import-project", {
       reason: "import-project",
       caller: "importJSON",
       activeObjectId: resolved.objectId,
@@ -1278,7 +1290,7 @@ export const useStore = create<State>()((set, get) => ({
     });
     set((state) => ({
       ...state,
-      ...parsed,
+      ...snapshotWithFocus,
       settings: resolved.settings,
       activeObjectId: resolved.objectId,
       activeFloorId: resolved.floorId,
@@ -1290,7 +1302,9 @@ export const useStore = create<State>()((set, get) => ({
       isRestoring: false,
       hasLoadedInitialSnapshot: true,
       hasHydratedFromStorage: true,
-      savedAt: Date.now(),
+      savedAt: now,
+      projectFilePath: openedFilePath,
+      projectFileSavedAt: openedFilePath ? now : null,
       history: [],
       future: [],
     }));
@@ -1307,6 +1321,17 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   exportJSON: () => JSON.stringify(selectData(get()), null, 2),
+
+  markProjectFileSaved: (filePath = null) => {
+    const state = get();
+    const nextPath = filePath ?? state.projectFilePath;
+    if (!nextPath) return;
+
+    set({
+      projectFilePath: nextPath,
+      projectFileSavedAt: state.savedAt,
+    });
+  },
 }));
 
 export async function bootstrapStore() {

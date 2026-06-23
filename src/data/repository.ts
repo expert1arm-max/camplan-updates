@@ -905,6 +905,8 @@ export async function saveSnapshot(
     data: payload,
     savedAt: now,
     updatedAt: now,
+    persistedAt: now,
+    lastSavedAt: now,
     activeObjectId: uiState.activeObjectId ?? null,
     activeFloorId: uiState.activeFloorId ?? null,
     source,

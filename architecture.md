@@ -9,11 +9,14 @@
 - Electron main process in `electron/main.cjs`.
 - Preload bridge in `electron/preload.cjs`.
 - Renderer uses safe IPC only for file dialogs.
+- `dialog:open-json` returns both file contents and the absolute path, so the renderer can track the currently opened project file.
+- Window close is mediated by `app:close-request` / `app:close-response`: the renderer reports whether the opened JSON file is dirty, and Electron main shows the native save confirmation before closing.
 
 ## Data layer
 - IndexedDB stores the app snapshot locally.
 - Renderer does not work directly with `localStorage`.
 - Import/export works through normalized app data.
+- The store keeps `projectFilePath` and `projectFileSavedAt` separately from IndexedDB autosave; this tracks whether the opened JSON file needs a save prompt without changing startup restore semantics.
 
 
 ## Selection and grouping

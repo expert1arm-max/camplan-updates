@@ -1134,10 +1134,10 @@ export function PlanCanvas({
   const openProject = async () => {
     const bridge = window.cctvDesktop;
     if (bridge) {
-      const text = await bridge.openJsonFile();
-      if (text) {
+      const result = await bridge.openJsonFile();
+      if (result) {
         try {
-          await importJSON(text);
+          await importJSON(result.content, result.filePath);
         } catch {
           console.error("Ошибка открытия проекта");
         }
@@ -2460,7 +2460,7 @@ export function PlanCanvas({
   useEffect(() => {
     if (!drag) return;
 
-    const onWindowMouseUp = (event: MouseEvent) => {
+    const onWindowMouseUp = (event: globalThis.MouseEvent) => {
       if (svgRef.current?.contains(event.target as Node)) return;
       finishDrag();
     };

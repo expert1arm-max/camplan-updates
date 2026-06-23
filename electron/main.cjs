@@ -23,6 +23,8 @@ const updateLauncherVbsPath = path.join(os.tmpdir(), "CamPlanUpdateLauncher.vbs"
 let server;
 let mainWindow;
 let pendingDownloadedInstaller = null;
+let allowWindowClose = false;
+let closeRequestInFlight = false;
 const updateInstallLogPrefix = "[update-install]";
 
 app.commandLine.appendSwitch("disable-gpu");
@@ -138,6 +140,22 @@ async function createWindow() {
     },
   });
   mainWindow = win;
+  allowWindowClose = false;
+  closeRequestInFlight = false;
+
+  win.on("close", (event) => {
+    if (allowWindowClose || win.isDestroyed()) {
+      return;
+    }
+
+    event.preventDefault();
+    if (closeRequestInFlight) {
+      return;
+    }
+
+    closeRequestInFlight = true;
+    win.webContents.send("app:close-request", { reason: "window-close" });
+  });
 
   if (isDev) {
     win.setMenuBarVisibility(false);
@@ -681,6 +699,56 @@ app.whenReady().then(() => {
     };
   });
 
+  ipcMain.handle("app:close-response", async (event, payload) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed()) {
+      return { state: "closed" };
+    }
+
+    const hasUnsavedChanges = Boolean(payload?.hasUnsavedChanges);
+    const filePath = String(payload?.filePath || "").trim();
+    const content = String(payload?.content ?? "");
+
+    if (hasUnsavedChanges && filePath) {
+      const result = await dialog.showMessageBox(win, {
+        type: "question",
+        title: "CamPlan",
+        message: "Сохранить изменения в открытый проект?",
+        detail: filePath,
+        buttons: ["Сохранить", "Не сохранять", "Отмена"],
+        defaultId: 0,
+        cancelId: 2,
+        noLink: true,
+      });
+
+      if (result.response === 2) {
+        closeRequestInFlight = false;
+        return { state: "canceled" };
+      }
+
+      if (result.response === 0) {
+        try {
+          await fs.writeFile(filePath, content, "utf-8");
+        } catch (error) {
+          await dialog.showMessageBox(win, {
+            type: "error",
+            title: "CamPlan",
+            message: "Не удалось сохранить проект.",
+            detail: error instanceof Error ? error.message : String(error),
+            buttons: ["OK"],
+          });
+          closeRequestInFlight = false;
+          return { state: "error" };
+        }
+      }
+    }
+
+    allowWindowClose = true;
+    closeRequestInFlight = false;
+    win.close();
+    return { state: "closing" };
+  });
+
   ipcMain.handle("dialog:open-json", async () => {
     const result = await dialog.showOpenDialog({
       properties: ["openFile"],
@@ -691,7 +759,11 @@ app.whenReady().then(() => {
       return null;
     }
 
-    return fs.readFile(result.filePaths[0], "utf-8");
+    const filePath = result.filePaths[0];
+    return {
+      filePath,
+      content: await fs.readFile(filePath, "utf-8"),
+    };
   });
 
   ipcMain.handle("shell:open-external", async (_event, url) => {
@@ -708,11 +780,11 @@ app.whenReady().then(() => {
     });
 
     if (result.canceled || !result.filePath) {
-      return false;
+      return { ok: false };
     }
 
     await fs.writeFile(result.filePath, String(payload?.content ?? ""), "utf-8");
-    return true;
+    return { ok: true, filePath: result.filePath };
   });
 
   ipcMain.handle("dialog:save-binary", async (_event, payload) => {
@@ -722,15 +794,15 @@ app.whenReady().then(() => {
     });
 
     if (result.canceled || !result.filePath) {
-      return false;
+      return { ok: false };
     }
 
     const dataUrl = String(payload?.dataUrl ?? "");
     const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : "";
-    if (!base64) return false;
+    if (!base64) return { ok: false };
 
     await fs.writeFile(result.filePath, Buffer.from(base64, "base64"));
-    return true;
+    return { ok: true, filePath: result.filePath };
   });
 
   void createWindow();

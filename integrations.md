@@ -5,6 +5,8 @@
 - `electron/preload.cjs`
 - Безопасный `BrowserWindow` с `contextIsolation`, отключенным `nodeIntegration` и `sandbox`.
 - Native file dialogs для открытия JSON и сохранения JSON/CSV/JPG.
+- `dialog:open-json` отдаёт renderer-у содержимое и абсолютный путь файла, чтобы открытый проект можно было сохранить обратно в тот же JSON.
+- При закрытии окна Electron запрашивает у renderer-а dirty-состояние открытого JSON и показывает native confirmation перед фактическим закрытием.
 
 ## Storage
 - IndexedDB в renderer.
