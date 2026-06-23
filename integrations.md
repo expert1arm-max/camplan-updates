@@ -43,6 +43,7 @@
 - The update launcher scripts are written with `fs.writeFileSync` before any window teardown, and the WScript spawn is only attempted after both files exist on disk; the app closes only after the launcher is successfully spawned.
 - The hidden WScript helper is spawned during QA and the existing debug/error logs still capture missing-installer details if the file cannot be found.
 - Restore persistence now writes the imported/edited snapshot to both IndexedDB and `localStorage`, records `savedAt`/`updatedAt` plus active object/floor metadata, and startup chooses the freshest non-empty snapshot so an empty project cannot overwrite a valid one on reopen.
+- Startup restore also treats `persistedAt` and `lastSavedAt` as timestamp sources and blocks autosave until `isRestoring` clears and `hasLoadedInitialSnapshot` becomes true.
 - Temporary QA instrumentation now logs every storage read/write with object/floor counts, active refs, and first object name so the empty-overwrite source can be proven before the guard is kept.
 - The NSIS installer now relies on local template overrides in `build/installer.nsh`, `build/installUtil.nsh`, and `build/allowOnlyOneInstallerInstance.nsh` to keep the update install flow silent after CamPlan exits.
 # Restore QA logging

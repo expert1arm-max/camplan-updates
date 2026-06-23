@@ -158,6 +158,8 @@
 - [ ] Open a JSON project through central `+` and confirm DevTools/localStorage logs show `IMPORT_APPLIED_TO_STORE`, `IMPORT_PERSISTED_INDEXEDDB`, and `IMPORT_PERSISTED_LOCALSTORAGE` with `objects.length > 0`.
 - [ ] Close CamPlan and reopen it once; confirm logs show `RESTORE_START`, `RESTORE_INDEXEDDB_RESULT`, `RESTORE_LOCALSTORAGE_RESULT`, `RESTORE_SELECTED_SOURCE`, and `RESTORE_APPLIED_TO_STORE`.
 - [ ] Confirm the last opened project appears automatically and the empty state is not shown first.
+- [ ] Confirm `persist:skip-empty-startup` appears only before hydration completes, never after a valid restore.
+- [ ] Confirm `isRestoring` and `hasLoadedInitialSnapshot` keep the loader visible until restore completes.
 - [ ] Repeat the same restore check through `File -> Open project`.
 - [ ] Repeat the same restore check through the left sidebar `+`.
 - [ ] Restart twice and confirm no empty autosave overwrote the valid project snapshot.

@@ -230,6 +230,7 @@
 - Built `0.2.32` locally as `release\CamPlan-Installer-0.2.32.exe`; the release binary and generated NSIS debug output no longer contain the close/retry prompt text.
 - Restore investigation is now instrumented with temporary QA logs around every storage read/write, explicit `hasHydratedFromStorage` gating, and an empty-snapshot overwrite guard that only allows `new-project-confirmed` to write a blank project.
 - Added a local `build/allowOnlyOneInstallerInstance.nsh` override to remove the remaining NSIS close/retry app-running dialog path; release build `0.2.32` is ready as `release\CamPlan-Installer-0.2.32.exe`.
+- Startup restore now also blocks persistence until `isRestoring` is false and `hasLoadedInitialSnapshot` is true, so the empty default state cannot win the startup race.
 # 25.05.2026 restore instrumentation
 
 - Added explicit restore/persist QA logging in the storage layer.

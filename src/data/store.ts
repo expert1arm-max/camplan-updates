@@ -33,6 +33,8 @@ interface State extends AppData {
   currentCableType: CableType;
   savedAt: number;
   isHydrated: boolean;
+  isRestoring: boolean;
+  hasLoadedInitialSnapshot: boolean;
   emptyStateReason: string | null;
   history: EditorSnapshot[];
   future: EditorSnapshot[];
@@ -291,12 +293,30 @@ function mutate(
 }
 
 function persistSnapshot(state: State, reason = "autosave") {
-  if (!state.hasHydratedFromStorage) {
+  const data = selectData(state);
+  if (
+    !state.isHydrated ||
+    !state.hasHydratedFromStorage ||
+    !state.hasLoadedInitialSnapshot ||
+    state.isRestoring
+  ) {
+    if (data.objects.length === 0) {
+      console.info("persist:skip-empty-startup");
+      logQaEvent("PERSIST_SKIP_EMPTY_STARTUP", data, {
+        caller: inferCallerName(),
+        source: reason,
+        reason,
+        storageTarget: "none",
+        status: "blocked",
+        activeObjectId: state.activeObjectId,
+        activeFloorId: state.activeFloorId,
+      });
+    }
     console.info(`persist:skip reason=${reason} caller=${inferCallerName()} not hydrated`);
     return;
   }
 
-  void saveSnapshot(selectData(state), reason, {
+  void saveSnapshot(data, reason, {
     reason,
     caller: inferCallerName(),
     activeObjectId: state.activeObjectId,
@@ -306,7 +326,7 @@ function persistSnapshot(state: State, reason = "autosave") {
 
 export function flushCurrentSnapshot() {
   const state = useStore.getState();
-  if (!state.isHydrated || !state.hasHydratedFromStorage) return;
+  if (!state.isHydrated || !state.hasHydratedFromStorage || state.isRestoring) return;
   void saveSnapshot(selectData(state), "exit", {
     reason: "exit",
     caller: "flushCurrentSnapshot",
@@ -534,6 +554,8 @@ export const useStore = create<State>()((set, get) => ({
   currentCableType: "utp",
   savedAt: Date.now(),
   isHydrated: false,
+  isRestoring: false,
+  hasLoadedInitialSnapshot: false,
   emptyStateReason: null,
   hasHydratedFromStorage: false,
   history: [],
@@ -556,6 +578,8 @@ export const useStore = create<State>()((set, get) => ({
         currentCableType: "utp",
         savedAt: Date.now(),
         isHydrated: true,
+        isRestoring: false,
+        hasLoadedInitialSnapshot: true,
         emptyStateReason,
         hasHydratedFromStorage: true,
         history: [],
@@ -1232,6 +1256,8 @@ export const useStore = create<State>()((set, get) => ({
       currentCableType: "utp",
       savedAt: Date.now(),
       isHydrated: true,
+      isRestoring: false,
+      hasLoadedInitialSnapshot: true,
       hasHydratedFromStorage: true,
       history: [],
       future: [],
@@ -1259,6 +1285,8 @@ export const useStore = create<State>()((set, get) => ({
       mode: "select",
       isEditMode: false,
       isHydrated: true,
+      isRestoring: false,
+      hasLoadedInitialSnapshot: true,
       hasHydratedFromStorage: true,
       savedAt: Date.now(),
       history: [],
@@ -1280,6 +1308,12 @@ export const useStore = create<State>()((set, get) => ({
 }));
 
 export async function bootstrapStore() {
+  useStore.setState({
+    isHydrated: false,
+    isRestoring: true,
+    hasLoadedInitialSnapshot: false,
+    hasHydratedFromStorage: false,
+  });
   logQaEvent("HYDRATION_START", null, {
     caller: "bootstrapStore",
     source: "bootstrap",
@@ -1311,9 +1345,7 @@ export async function bootstrapStore() {
       activeObjectId: state.activeObjectId ?? resolved.objectId ?? null,
       activeFloorId: state.activeFloorId ?? resolved.floorId ?? null,
     });
-    if (resolved.changed) {
-      persistSnapshot(useStore.getState(), "restore");
-    }
+    persistSnapshot(useStore.getState(), "restore");
     return;
   }
 

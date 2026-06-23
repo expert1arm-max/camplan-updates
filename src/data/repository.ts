@@ -70,6 +70,8 @@ type PersistedSnapshot = {
   data: AppData;
   savedAt: number;
   updatedAt: number;
+  persistedAt: number;
+  lastSavedAt: number;
   activeObjectId: string | null;
   activeFloorId: string | null;
   source: string;
@@ -83,6 +85,8 @@ type SnapshotCandidate = {
   snapshot: AppData;
   savedAt: number;
   updatedAt: number;
+  persistedAt: number;
+  lastSavedAt: number;
   activeObjectId: string | null;
   activeFloorId: string | null;
   contentCount: number;
@@ -353,8 +357,12 @@ function writeBackupRaw(value: unknown): boolean {
 
 function readPersistedTimestamp(value: unknown): number {
   if (!isRecord(value)) return 0;
-  const timestamp = Number(value.updatedAt ?? value.savedAt);
-  return Number.isFinite(timestamp) ? timestamp : 0;
+  const candidates = [value.updatedAt, value.persistedAt, value.lastSavedAt, value.savedAt];
+  for (const candidate of candidates) {
+    const timestamp = Number(candidate);
+    if (Number.isFinite(timestamp)) return timestamp;
+  }
+  return 0;
 }
 
 function countSnapshotContent(value: unknown): number {
@@ -410,6 +418,14 @@ function toPersistedCandidate(
     const updatedAt = Number(
       isRecord(raw) ? Number(raw.updatedAt ?? raw.savedAt ?? savedAt) : savedAt,
     );
+    const persistedAt = Number(
+      isRecord(raw) ? Number(raw.persistedAt ?? raw.updatedAt ?? raw.savedAt ?? savedAt) : savedAt,
+    );
+    const lastSavedAt = Number(
+      isRecord(raw)
+        ? Number(raw.lastSavedAt ?? raw.persistedAt ?? raw.updatedAt ?? raw.savedAt ?? savedAt)
+        : savedAt,
+    );
     const activeObjectId =
       typeof raw.activeObjectId === "string" || raw.activeObjectId === null
         ? raw.activeObjectId
@@ -443,6 +459,22 @@ function toPersistedCandidate(
       snapshot,
       savedAt: Number.isFinite(savedAt) ? savedAt : 0,
       updatedAt: Number.isFinite(updatedAt) ? updatedAt : Number.isFinite(savedAt) ? savedAt : 0,
+      persistedAt: Number.isFinite(persistedAt)
+        ? persistedAt
+        : Number.isFinite(updatedAt)
+          ? updatedAt
+          : Number.isFinite(savedAt)
+            ? savedAt
+            : 0,
+      lastSavedAt: Number.isFinite(lastSavedAt)
+        ? lastSavedAt
+        : Number.isFinite(persistedAt)
+          ? persistedAt
+          : Number.isFinite(updatedAt)
+            ? updatedAt
+            : Number.isFinite(savedAt)
+              ? savedAt
+              : 0,
       activeObjectId,
       activeFloorId,
       contentCount,
@@ -475,7 +507,13 @@ function chooseLatestSnapshot(
   );
 
   if (restorable.length > 0) {
-    return restorable.sort((a, b) => b.updatedAt - a.updatedAt || b.savedAt - a.savedAt)[0] ?? null;
+    return (
+      restorable.sort((a, b) => {
+        const aTimestamp = Math.max(a.updatedAt, a.persistedAt, a.lastSavedAt, a.savedAt);
+        const bTimestamp = Math.max(b.updatedAt, b.persistedAt, b.lastSavedAt, b.savedAt);
+        return bTimestamp - aTimestamp || b.savedAt - a.savedAt;
+      })[0] ?? null
+    );
   }
 
   return null;
@@ -722,6 +760,7 @@ export function normalizeAppData(input: unknown): AppData {
 }
 
 export async function loadBestSnapshot(): Promise<SnapshotCandidate | null> {
+  console.info("restore:start");
   logQaEvent("RESTORE_START", null, {
     caller: "loadBestSnapshot",
     source: "restore",
@@ -735,7 +774,16 @@ export async function loadBestSnapshot(): Promise<SnapshotCandidate | null> {
     const indexeddb = toPersistedCandidate("indexeddb", indexeddbRaw);
     const localstorageRaw = readBackupRaw();
     const localstorage = toPersistedCandidate("localstorage", localstorageRaw);
+
+    console.info(`restore:indexeddb ${indexeddb ? (indexeddb.contentCount > 0 ? "found" : "empty") : "empty"}`);
+    console.info(`restore:backup ${localstorage ? (localstorage.contentCount > 0 ? "found" : "empty") : "empty"}`);
+
     const latest = chooseLatestSnapshot(indexeddb, localstorage);
+
+    console.info(
+      `restore:selected ${latest?.storageTarget === "indexeddb" ? "indexeddb" : latest?.storageTarget === "localstorage" ? "backup" : "empty"}`,
+    );
+    console.info(`restore:objects count ${latest?.contentCount ?? 0}`);
 
     logQaEvent(
       "RESTORE_SELECTED_SOURCE",
@@ -847,6 +895,12 @@ export async function saveSnapshot(
             : source === "exit"
               ? "EXIT"
               : "PERSIST";
+
+  if (source === "restore") {
+    console.info("persist:after restore");
+  } else if (source === "autosave") {
+    console.info("persist:after autosave");
+  }
 
   logQaEvent(`${normalizedEventSource}_PERSISTED_LOCALSTORAGE`, payload, {
     caller,
