@@ -188,3 +188,4 @@ MVP desktop-версии реализован. Сейчас проект нах�
 - Keep the hydration guard in place so empty startup state cannot overwrite a valid saved project.
 - Confirm QA logs in DevTools/localStorage show the import and restore path end-to-end.
 - Verify the new `wifi_router` device type appears in the toolbar, can be placed on the plan, shows the expected properties, and survives JSON import/export.
+- Prepare and publish release `0.2.33` after the switch icon refresh so GitHub gets a new tagged installer build.
