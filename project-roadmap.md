@@ -192,5 +192,5 @@ MVP desktop-версии реализован. Сейчас проект нах�
 - Confirm QA logs in DevTools/localStorage show the import and restore path end-to-end.
 - Verify the new `wifi_router` device type appears in the toolbar, can be placed on the plan, shows the expected properties, and survives JSON import/export.
 - Verify the packaged build opens a live React UI through the SSR bootstrap path before touching restore/save again.
-- Publish release `0.2.35` with stable `camplan://app/` packaged origin, then manually verify installed-build restore by opening a JSON project, closing CamPlan, and reopening it.
+- Publish release `0.2.36` with stable `camplan://app/` packaged origin and no visible QA debug overlay, then manually verify installed-build restore by opening a JSON project, closing CamPlan, and reopening it.
 - Verify that closing the packaged app no longer throws `ReferenceError: server is not defined` from the main-process `window-all-closed` path.

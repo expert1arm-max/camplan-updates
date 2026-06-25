@@ -237,9 +237,10 @@
 - Updated the `switch` toolbar icon to `EthernetPort` so it no longer visually matches `wifi_router`, and prepared release `0.2.33`.
 - Opening a JSON project through the Electron file dialog now remembers the source file path; if the project changes and the user closes the window, CamPlan asks whether to save changes back into that opened file before closing.
 - Prepared release `0.2.34` with the opened-project close save prompt and package-lock version alignment.
-- Fixed the packaged startup restore root cause by replacing the random localhost production origin with stable `camplan://app/`; release `0.2.35` is built locally so installed builds reuse the same IndexedDB/localStorage origin on every launch.
+- Fixed the packaged startup restore root cause by replacing the random localhost production origin with stable `camplan://app/`; release `0.2.36` is built locally so installed builds reuse the same IndexedDB/localStorage origin on every launch.
 - Packaged UI loading is now verified separately from restore: the current QA target is to confirm the installed build opens a live React UI first, then resume import/save/restore checks only after that passes.
 - Fixed a shutdown-time main-process exception by removing the stale `server.close()` reference from the Electron `window-all-closed` handler, so closing the app no longer throws `ReferenceError: server is not defined`.
+- Temporary QA overlay and storage debug noise are now dev-only; the packaged release is being prepared as `0.2.36` without the visible debug block.
 # 25.05.2026 restore instrumentation
 
 - Added explicit restore/persist QA logging in the storage layer.

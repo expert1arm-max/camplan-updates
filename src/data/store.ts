@@ -22,6 +22,8 @@ import type {
 } from "@/types";
 import { loadBestSnapshot, logQaEvent, normalizeAppData, saveSnapshot } from "./repository";
 
+const isQaDebugEnabled = import.meta.env.DEV;
+
 interface State extends AppData {
   activeObjectId: string | null;
   activeFloorId: string | null;
@@ -304,7 +306,9 @@ function persistSnapshot(state: State, reason = "autosave") {
     state.isRestoring
   ) {
     if (data.objects.length === 0) {
-      console.info("persist:skip-empty-startup");
+      if (isQaDebugEnabled) {
+        console.info("persist:skip-empty-startup");
+      }
       logQaEvent("PERSIST_SKIP_EMPTY_STARTUP", data, {
         caller: inferCallerName(),
         source: reason,
@@ -315,7 +319,9 @@ function persistSnapshot(state: State, reason = "autosave") {
         activeFloorId: state.activeFloorId,
       });
     }
-    console.info(`persist:skip reason=${reason} caller=${inferCallerName()} not hydrated`);
+    if (isQaDebugEnabled) {
+      console.info(`persist:skip reason=${reason} caller=${inferCallerName()} not hydrated`);
+    }
     return;
   }
 

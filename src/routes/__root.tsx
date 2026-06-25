@@ -188,13 +188,15 @@ function RootComponent() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [copySelected, isEditMode, pasteClipboard, redo, undo]);
 
-  if (!isHydrated || isRestoring || !hasLoadedInitialSnapshot) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
-        Загрузка проекта...
-      </div>
-    );
-  }
-
-  return <Outlet />;
+  return (
+    <>
+      {!isHydrated || isRestoring || !hasLoadedInitialSnapshot ? (
+        <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
+          Загрузка проекта...
+        </div>
+      ) : (
+        <Outlet />
+      )}
+    </>
+  );
 }

@@ -25,6 +25,7 @@
 - Imported projects are now persisted immediately to both IndexedDB and the `localStorage` backup, and startup restore prefers the freshest non-empty snapshot so a blank startup state cannot overwrite the last opened project.
 - Restore/autosave now uses an explicit `hasHydratedFromStorage` guard and blocks empty snapshot overwrites unless the action was an explicit `new-project-confirmed`.
 - NSIS close/retry prompts are being removed by local template overrides in `build/installer.nsh`, `build/installUtil.nsh`, and `build/allowOnlyOneInstallerInstance.nsh` so the update installer can continue without a blocking app-close dialog.
+- The temporary QA overlay and persistence debug noise are dev-only diagnostics; packaged releases should not render the overlay.
 # Restore QA decisions
 
 - Restore QA logs are written both to DevTools console and to `localStorage["camplan:qa-debug-log"]` so the team can prove where a snapshot is lost before changing behavior again.

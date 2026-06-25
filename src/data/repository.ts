@@ -20,7 +20,10 @@ const STORE_NAME = "app-data";
 const STORAGE_KEY = "current";
 const BACKUP_STORAGE_KEY = "camplan:last-app-data";
 const DEBUG_LOG_STORAGE_KEY = "camplan:qa-debug-log";
+const DEBUG_STATE_STORAGE_KEY = "camplan:qa-debug-state";
+const STORAGE_PROFILE_MARKER_KEY = "camplan:storage-profile-marker";
 const INVALID_BACKUP_RAW = Symbol("camplan-invalid-backup-raw");
+const isQaDebugEnabled = import.meta.env.DEV;
 
 const DEFAULT_SETTINGS: AppData["settings"] = {
   theme: "system",
@@ -113,6 +116,172 @@ type QaLogDetails = {
   activeFloorId?: string | null;
 };
 
+type QaDebugState = {
+  profileMarker: string;
+  lastEvent: string;
+  lastEventStatus: string;
+  lastEventSource: string;
+  lastEventCaller: string;
+  lastEventTimestamp: string;
+  lastEventObjectsLength: number;
+  lastEventFloorsLength: number;
+  lastEventActiveObjectId: string | null;
+  lastEventActiveFloorId: string | null;
+  lastEventIsEmpty: boolean;
+  lastEventMessage: string;
+  lastSaveSource: string;
+  lastSaveStatus: string;
+  lastSaveIndexedDBStatus: string;
+  lastSaveIndexedDBError: string;
+  lastSaveLocalStorageStatus: string;
+  lastSaveLocalStorageError: string;
+  lastRestoreSource: string;
+  lastRestoreStatus: string;
+  lastRestoreObjectsCount: number;
+  lastRestoreIndexedDBStatus: string;
+  lastRestoreLocalStorageStatus: string;
+  lastObjectsLength: number;
+  lastFloorsLength: number;
+  lastImportAppliedStatus: string;
+  lastImportAppliedObjectsCount: number;
+};
+
+type WriteResult = {
+  ok: boolean;
+  error: string | null;
+};
+
+function getDefaultQaDebugState(): QaDebugState {
+  return {
+    profileMarker: "unavailable",
+    lastEvent: "",
+    lastEventStatus: "",
+    lastEventSource: "",
+    lastEventCaller: "",
+    lastEventTimestamp: "",
+    lastEventObjectsLength: 0,
+    lastEventFloorsLength: 0,
+    lastEventActiveObjectId: null,
+    lastEventActiveFloorId: null,
+    lastEventIsEmpty: true,
+    lastEventMessage: "",
+    lastSaveSource: "",
+    lastSaveStatus: "",
+    lastSaveIndexedDBStatus: "",
+    lastSaveIndexedDBError: "",
+    lastSaveLocalStorageStatus: "",
+    lastSaveLocalStorageError: "",
+    lastRestoreSource: "",
+    lastRestoreStatus: "",
+    lastRestoreObjectsCount: 0,
+    lastRestoreIndexedDBStatus: "",
+    lastRestoreLocalStorageStatus: "",
+    lastObjectsLength: 0,
+    lastFloorsLength: 0,
+    lastImportAppliedStatus: "",
+    lastImportAppliedObjectsCount: 0,
+  };
+}
+
+function ensureStorageProfileMarker() {
+  const storage = getBackupStorage();
+  if (!storage) return "unavailable";
+
+  try {
+    const existing = storage.getItem(STORAGE_PROFILE_MARKER_KEY);
+    if (existing) return existing;
+
+    const generated = `profile-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    storage.setItem(STORAGE_PROFILE_MARKER_KEY, generated);
+    return generated;
+  } catch {
+    return "unavailable";
+  }
+}
+
+function readQaDebugState(): QaDebugState {
+  const storage = getBackupStorage();
+  const fallback = getDefaultQaDebugState();
+  fallback.profileMarker = ensureStorageProfileMarker();
+
+  if (!storage) return fallback;
+
+  try {
+    const raw = storage.getItem(DEBUG_STATE_STORAGE_KEY);
+    if (!raw) return fallback;
+
+    const parsed = JSON.parse(raw);
+    if (!isRecord(parsed)) return fallback;
+
+    return {
+      ...fallback,
+      profileMarker: asString(parsed.profileMarker, fallback.profileMarker),
+      lastEvent: asString(parsed.lastEvent, fallback.lastEvent),
+      lastEventStatus: asString(parsed.lastEventStatus, fallback.lastEventStatus),
+      lastEventSource: asString(parsed.lastEventSource, fallback.lastEventSource),
+      lastEventCaller: asString(parsed.lastEventCaller, fallback.lastEventCaller),
+      lastEventTimestamp: asString(parsed.lastEventTimestamp, fallback.lastEventTimestamp),
+      lastEventObjectsLength: asNumber(parsed.lastEventObjectsLength, fallback.lastEventObjectsLength),
+      lastEventFloorsLength: asNumber(parsed.lastEventFloorsLength, fallback.lastEventFloorsLength),
+      lastEventActiveObjectId: asNullableString(parsed.lastEventActiveObjectId),
+      lastEventActiveFloorId: asNullableString(parsed.lastEventActiveFloorId),
+      lastEventIsEmpty: asBoolean(parsed.lastEventIsEmpty, fallback.lastEventIsEmpty),
+      lastEventMessage: asString(parsed.lastEventMessage, fallback.lastEventMessage),
+      lastSaveSource: asString(parsed.lastSaveSource, fallback.lastSaveSource),
+      lastSaveStatus: asString(parsed.lastSaveStatus, fallback.lastSaveStatus),
+      lastSaveIndexedDBStatus: asString(parsed.lastSaveIndexedDBStatus, fallback.lastSaveIndexedDBStatus),
+      lastSaveIndexedDBError: asString(parsed.lastSaveIndexedDBError, fallback.lastSaveIndexedDBError),
+      lastSaveLocalStorageStatus: asString(
+        parsed.lastSaveLocalStorageStatus,
+        fallback.lastSaveLocalStorageStatus,
+      ),
+      lastSaveLocalStorageError: asString(
+        parsed.lastSaveLocalStorageError,
+        fallback.lastSaveLocalStorageError,
+      ),
+      lastRestoreSource: asString(parsed.lastRestoreSource, fallback.lastRestoreSource),
+      lastRestoreStatus: asString(parsed.lastRestoreStatus, fallback.lastRestoreStatus),
+      lastRestoreObjectsCount: asNumber(parsed.lastRestoreObjectsCount, fallback.lastRestoreObjectsCount),
+      lastRestoreIndexedDBStatus: asString(
+        parsed.lastRestoreIndexedDBStatus,
+        fallback.lastRestoreIndexedDBStatus,
+      ),
+      lastRestoreLocalStorageStatus: asString(
+        parsed.lastRestoreLocalStorageStatus,
+        fallback.lastRestoreLocalStorageStatus,
+      ),
+      lastObjectsLength: asNumber(parsed.lastObjectsLength, fallback.lastObjectsLength),
+      lastFloorsLength: asNumber(parsed.lastFloorsLength, fallback.lastFloorsLength),
+      lastImportAppliedStatus: asString(parsed.lastImportAppliedStatus, fallback.lastImportAppliedStatus),
+      lastImportAppliedObjectsCount: asNumber(
+        parsed.lastImportAppliedObjectsCount,
+        fallback.lastImportAppliedObjectsCount,
+      ),
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function writeQaDebugState(patch: Partial<QaDebugState>) {
+  if (!isQaDebugEnabled) return;
+  const storage = getBackupStorage();
+  if (!storage) return;
+
+  try {
+    const current = readQaDebugState();
+    const next = {
+      ...current,
+      ...patch,
+      profileMarker: patch.profileMarker ?? current.profileMarker,
+    };
+    storage.setItem(DEBUG_STATE_STORAGE_KEY, JSON.stringify(next));
+    window.dispatchEvent(new Event("camplan:qa-debug-state"));
+  } catch {
+    // QA debug state is best-effort and must not break persistence.
+  }
+}
+
 function getBackupStorage() {
   if (typeof localStorage === "undefined") return null;
   return localStorage;
@@ -202,6 +371,7 @@ export function logQaEvent(
   snapshot: AppData | null,
   details: QaLogDetails = {},
 ) {
+  if (!isQaDebugEnabled) return;
   const summary = snapshot
     ? getSnapshotSummary(
         snapshot,
@@ -237,6 +407,23 @@ export function logQaEvent(
 
   console.info(event, entry);
   appendDebugLogLine(JSON.stringify(entry));
+  writeQaDebugState({
+    lastEvent: event,
+    lastEventStatus: entry.status,
+    lastEventSource: entry.source,
+    lastEventCaller: entry.caller,
+    lastEventTimestamp: entry.timestamp,
+    lastEventObjectsLength: entry.objectsLength,
+    lastEventFloorsLength: entry.floorsLength,
+    lastEventActiveObjectId: entry.activeObjectId,
+    lastEventActiveFloorId: entry.activeFloorId,
+    lastEventIsEmpty: entry.isEmpty,
+    lastEventMessage: entry.message,
+  });
+}
+
+export function getQaDebugState() {
+  return readQaDebugState();
 }
 
 export function isValidNonEmptySnapshot(snapshot: AppData) {
@@ -306,25 +493,26 @@ async function readRaw(): Promise<unknown | null> {
   });
 }
 
-async function writeRaw(value: unknown): Promise<boolean> {
+async function writeRaw(value: unknown): Promise<WriteResult> {
   const db = await openDb();
-  if (!db) return false;
+  if (!db) return { ok: false, error: "IndexedDB unavailable" };
 
-  const ok = await new Promise<boolean>((resolve) => {
+  const result = await new Promise<WriteResult>((resolve) => {
     const tx = db.transaction(STORE_NAME, "readwrite");
     const store = tx.objectStore(STORE_NAME);
     store.put(value, STORAGE_KEY);
     tx.oncomplete = () => {
       db.close();
-      resolve(true);
+      resolve({ ok: true, error: null });
     };
     tx.onerror = () => {
+      const errorMessage = tx.error?.message || tx.error?.name || "IndexedDB write failed";
       db.close();
-      resolve(false);
+      resolve({ ok: false, error: errorMessage });
     };
   });
 
-  return ok;
+  return result;
 }
 
 function readBackupRaw(): unknown | null | typeof INVALID_BACKUP_RAW {
@@ -341,18 +529,20 @@ function readBackupRaw(): unknown | null | typeof INVALID_BACKUP_RAW {
   }
 }
 
-function writeBackupRaw(value: unknown): boolean {
+function writeBackupRaw(value: unknown): WriteResult {
   const storage = getBackupStorage();
-  if (!storage) return false;
+  if (!storage) return { ok: false, error: "localStorage unavailable" };
 
   try {
     storage.setItem(BACKUP_STORAGE_KEY, JSON.stringify(value));
-    return true;
-  } catch {
+    return { ok: true, error: null };
+  } catch (error) {
     // localStorage is a best-effort backup for the latest project snapshot.
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "localStorage write failed",
+    };
   }
-
-  return false;
 }
 
 function readPersistedTimestamp(value: unknown): number {
@@ -791,7 +981,9 @@ export function normalizeAppData(input: unknown): AppData {
 }
 
 export async function loadBestSnapshot(): Promise<SnapshotCandidate | null> {
-  console.info("restore:start");
+  if (isQaDebugEnabled) {
+    console.info("restore:start");
+  }
   logQaEvent("RESTORE_START", null, {
     caller: "loadBestSnapshot",
     source: "restore",
@@ -806,15 +998,29 @@ export async function loadBestSnapshot(): Promise<SnapshotCandidate | null> {
     const localstorageRaw = readBackupRaw();
     const localstorage = toPersistedCandidate("localstorage", localstorageRaw);
 
-    console.info(`restore:indexeddb ${indexeddb ? (indexeddb.contentCount > 0 ? "found" : "empty") : "empty"}`);
-    console.info(`restore:backup ${localstorage ? (localstorage.contentCount > 0 ? "found" : "empty") : "empty"}`);
+    if (isQaDebugEnabled) {
+      console.info(`restore:indexeddb ${indexeddb ? (indexeddb.contentCount > 0 ? "found" : "empty") : "empty"}`);
+      console.info(`restore:backup ${localstorage ? (localstorage.contentCount > 0 ? "found" : "empty") : "empty"}`);
+    }
 
     const latest = chooseLatestSnapshot(indexeddb, localstorage);
 
-    console.info(
-      `restore:selected ${latest?.storageTarget === "indexeddb" ? "indexeddb" : latest?.storageTarget === "localstorage" ? "backup" : "empty"}`,
-    );
-    console.info(`restore:objects count ${latest?.contentCount ?? 0}`);
+    writeQaDebugState({
+      lastRestoreSource: latest?.storageTarget ?? "none",
+      lastRestoreStatus: latest ? "selected" : "empty",
+      lastRestoreObjectsCount: latest?.contentCount ?? 0,
+      lastRestoreIndexedDBStatus: indexeddb ? "found" : "empty",
+      lastRestoreLocalStorageStatus: localstorage ? "found" : "empty",
+      lastObjectsLength: latest?.snapshot.objects.length ?? 0,
+      lastFloorsLength: latest?.snapshot.floors.length ?? 0,
+    });
+
+    if (isQaDebugEnabled) {
+      console.info(
+        `restore:selected ${latest?.storageTarget === "indexeddb" ? "indexeddb" : latest?.storageTarget === "localstorage" ? "backup" : "empty"}`,
+      );
+      console.info(`restore:objects count ${latest?.contentCount ?? 0}`);
+    }
 
     logQaEvent(
       "RESTORE_SELECTED_SOURCE",
@@ -833,6 +1039,11 @@ export async function loadBestSnapshot(): Promise<SnapshotCandidate | null> {
 
     return latest;
   } catch (error) {
+    writeQaDebugState({
+      lastRestoreSource: "none",
+      lastRestoreStatus: "error",
+      lastRestoreObjectsCount: 0,
+    });
     logQaEvent("RESTORE_SELECTED_SOURCE", null, {
       caller: "loadBestSnapshot",
       source: "none",
@@ -888,6 +1099,19 @@ export async function saveSnapshot(
     activeFloorId: uiState.activeFloorId ?? null,
   });
 
+  writeQaDebugState({
+    lastSaveSource: source,
+    lastSaveStatus: "called",
+    lastSaveIndexedDBStatus: "pending",
+    lastSaveIndexedDBError: "",
+    lastSaveLocalStorageStatus: "pending",
+    lastSaveLocalStorageError: "",
+    lastObjectsLength: payload.objects.length,
+    lastFloorsLength: payload.floors.length,
+    lastImportAppliedObjectsCount:
+      source === "import-project" ? payload.objects.length : readQaDebugState().lastImportAppliedObjectsCount,
+  });
+
   if (isEmptySnapshot(payload) && source !== "new-project-confirmed") {
     logQaEvent("SAVE_SNAPSHOT_SKIPPED", payload, {
       caller,
@@ -897,6 +1121,11 @@ export async function saveSnapshot(
       status: "empty-blocked",
       activeObjectId: uiState.activeObjectId ?? null,
       activeFloorId: uiState.activeFloorId ?? null,
+    });
+    writeQaDebugState({
+      lastSaveStatus: "blocked-empty",
+      lastSaveIndexedDBStatus: "skipped",
+      lastSaveLocalStorageStatus: "skipped",
     });
     return;
   }
@@ -913,8 +1142,8 @@ export async function saveSnapshot(
     caller,
   };
 
-  const backupOk = writeBackupRaw(snapshot);
-  const dbOk = await writeRaw(snapshot);
+  const backupResult = writeBackupRaw(snapshot);
+  const dbResult = await writeRaw(snapshot);
 
   const normalizedEventSource =
     source === "import-project"
@@ -929,18 +1158,39 @@ export async function saveSnapshot(
               ? "EXIT"
               : "PERSIST";
 
-  if (source === "restore") {
-    console.info("persist:after restore");
-  } else if (source === "autosave") {
-    console.info("persist:after autosave");
+  if (isQaDebugEnabled) {
+    if (source === "restore") {
+      console.info("persist:after restore");
+    } else if (source === "autosave") {
+      console.info("persist:after autosave");
+    }
   }
+
+  writeQaDebugState({
+    lastSaveSource: source,
+    lastSaveStatus: backupResult.ok && dbResult.ok ? "success" : "error",
+    lastSaveIndexedDBStatus: dbResult.ok ? "success" : "error",
+    lastSaveIndexedDBError: dbResult.error ?? "",
+    lastSaveLocalStorageStatus: backupResult.ok ? "success" : "error",
+    lastSaveLocalStorageError: backupResult.error ?? "",
+    lastObjectsLength: payload.objects.length,
+    lastFloorsLength: payload.floors.length,
+    lastImportAppliedStatus:
+      source === "import-project"
+        ? backupResult.ok && dbResult.ok
+          ? "success"
+          : "error"
+        : readQaDebugState().lastImportAppliedStatus,
+    lastImportAppliedObjectsCount:
+      source === "import-project" ? payload.objects.length : readQaDebugState().lastImportAppliedObjectsCount,
+  });
 
   logQaEvent(`${normalizedEventSource}_PERSISTED_LOCALSTORAGE`, payload, {
     caller,
     source,
     reason,
     storageTarget: "localstorage",
-    status: backupOk ? "ok" : "error",
+    status: backupResult.ok ? "ok" : "error",
     activeObjectId: uiState.activeObjectId ?? null,
     activeFloorId: uiState.activeFloorId ?? null,
   });
@@ -949,7 +1199,7 @@ export async function saveSnapshot(
     source,
     reason,
     storageTarget: "indexeddb",
-    status: dbOk ? "ok" : "error",
+    status: dbResult.ok ? "ok" : "error",
     activeObjectId: uiState.activeObjectId ?? null,
     activeFloorId: uiState.activeFloorId ?? null,
   });
@@ -959,7 +1209,7 @@ export async function saveSnapshot(
     source,
     reason,
     storageTarget: "both",
-    status: dbOk && backupOk ? "ok" : "partial",
+    status: dbResult.ok && backupResult.ok ? "ok" : "partial",
     activeObjectId: uiState.activeObjectId ?? null,
     activeFloorId: uiState.activeFloorId ?? null,
   });
