@@ -11,6 +11,7 @@ MVP desktop-версии реализован. Сейчас проект нах�
 - Verify Save Project, JPG export, and CSV export stay disabled while the project is empty and become active only after content exists.
 - Verify the restore flow persists imported JSON immediately to both IndexedDB and `localStorage`, and that an empty startup snapshot never overwrites a valid saved project.
 - Use temporary QA logs to prove which storage write path emits an empty snapshot after import, then keep only the guard that blocks empty overwrite unless the action was an explicit `new-project-confirmed`.
+- Verify the temporary visible QA overlay in the packaged build shows the live save/import/restore state after opening JSON through each entry point.
 - Проверить, что при запуске приложение тихо проверяет latest release на GitHub, а кнопка `О программе` подсвечивается зелёным при наличии более новой версии.
 - Проверить, что в empty-state центральная кнопка `+` открывает JSON-проект с компьютера и скрывается после появления объектов.
 - Проверить, что кнопка `+` в левой панели открывает JSON-файл проекта с компьютера и импортирует его в текущее состояние.
@@ -190,4 +191,6 @@ MVP desktop-версии реализован. Сейчас проект нах�
 - Keep the hydration guard in place so empty startup state cannot overwrite a valid saved project.
 - Confirm QA logs in DevTools/localStorage show the import and restore path end-to-end.
 - Verify the new `wifi_router` device type appears in the toolbar, can be placed on the plan, shows the expected properties, and survives JSON import/export.
+- Verify the packaged build opens a live React UI through the SSR bootstrap path before touching restore/save again.
 - Publish release `0.2.35` with stable `camplan://app/` packaged origin, then manually verify installed-build restore by opening a JSON project, closing CamPlan, and reopening it.
+- Verify that closing the packaged app no longer throws `ReferenceError: server is not defined` from the main-process `window-all-closed` path.

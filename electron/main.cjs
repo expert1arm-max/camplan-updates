@@ -20,9 +20,11 @@ const updateDebugLogPath = path.join(os.tmpdir(), "CamPlanUpdateDebug.log");
 const updateErrorLogPath = path.join(os.tmpdir(), "CamPlanUpdateError.log");
 const updateLauncherCmdPath = path.join(os.tmpdir(), "CamPlanUpdateLauncher.cmd");
 const updateLauncherVbsPath = path.join(os.tmpdir(), "CamPlanUpdateLauncher.vbs");
+const protocolDebugLogPath = path.join(os.tmpdir(), "CamPlanProtocolDebug.log");
 let mainWindow;
 let productionProtocolReady = false;
 let productionWorkerPromise = null;
+let productionShellResourcesPromise = null;
 let pendingDownloadedInstaller = null;
 let allowWindowClose = false;
 let closeRequestInFlight = false;
@@ -81,6 +83,98 @@ async function getProductionWorker() {
   return productionWorkerPromise;
 }
 
+async function getProductionShellResources() {
+  if (!productionShellResourcesPromise) {
+    productionShellResourcesPromise = (async () => {
+      const clientAssetsDir = path.join(app.getAppPath(), "dist", "client", "assets");
+      const files = await fs.readdir(clientAssetsDir);
+      const cssFile = files.find((file) => file.startsWith("styles-") && file.endsWith(".css")) ?? null;
+      const jsCandidates = files.filter((file) => file.endsWith(".js") && file.startsWith("index-"));
+
+      let entryFile = null;
+      if (!entryFile) {
+        for (const file of jsCandidates) {
+          try {
+            const content = await fs.readFile(path.join(clientAssetsDir, file), "utf8");
+            if (content.includes("hydrateRoot(document")) {
+              entryFile = file;
+              break;
+            }
+          } catch {
+            // ignore and keep searching
+          }
+        }
+      }
+
+      if (!entryFile) {
+        entryFile = jsCandidates[0] ?? null;
+      }
+
+      return {
+        cssHref: cssFile ? `/assets/${cssFile}` : null,
+        jsHref: entryFile ? `/assets/${entryFile}` : null,
+      };
+    })();
+  }
+
+  return productionShellResourcesPromise;
+}
+
+async function buildProductionShellHtml() {
+  const resources = await getProductionShellResources();
+  const styles = resources.cssHref ? `<link rel="stylesheet" href="${resources.cssHref}">` : "";
+  const script = resources.jsHref ? `<script type="module" src="${resources.jsHref}"></script>` : "";
+
+  return `<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; form-action 'self'; img-src 'self' data: blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; object-src 'none'" />
+    <title>CamPlan</title>
+    ${styles}
+  </head>
+  <body>
+    ${script}
+  </body>
+</html>`;
+}
+
+async function buildProductionDocumentResponse(request) {
+  const worker = await getProductionWorker();
+  const url = new URL(request.url);
+  const internalUrl = new URL(`https://camplan.app${url.pathname}${url.search}`);
+  const accept = request.headers.get("accept") || "text/html";
+  const internalRequest = new Request(internalUrl, {
+    method: request.method,
+    headers: {
+      accept,
+    },
+  });
+
+  logProtocolDebug("document", url.pathname, "ssr-request", internalUrl.toString());
+  const response = await worker.fetch(internalRequest);
+  const contentType = response.headers.get("content-type") || "";
+  logProtocolDebug(
+    "document",
+    url.pathname,
+    "ssr-response",
+    `status=${response.status}`,
+    `content-type=${contentType || "(empty)"}`,
+  );
+
+  if (response.ok && contentType.includes("text/html")) {
+    return response;
+  }
+
+  const html = await buildProductionShellHtml();
+  logProtocolDebug("document", url.pathname, "fallback-static-shell", `status=${response.status}`);
+  return new Response(html, {
+    status: 200,
+    headers: { "content-type": "text/html; charset=utf-8" },
+  });
+}
+
 async function setupProductionProtocol() {
   if (productionProtocolReady) {
     return;
@@ -92,9 +186,11 @@ async function setupProductionProtocol() {
     try {
       const url = new URL(request.url);
       const pathname = url.pathname;
+      logProtocolDebug("request", request.url, "accept=", request.headers.get("accept") || "(empty)");
 
       if (pathname.startsWith("/assets/") || pathname === "/.assetsignore") {
         const assetPath = path.join(clientDir, pathname.slice(1));
+        logProtocolDebug("asset", pathname, "path=", assetPath);
 
         try {
           const buffer = await fs.readFile(assetPath);
@@ -107,9 +203,9 @@ async function setupProductionProtocol() {
         }
       }
 
-      const worker = await getProductionWorker();
-      return worker.fetch(request, {}, { waitUntil() {} });
+      return await buildProductionDocumentResponse(request);
     } catch (error) {
+      logProtocolDebug("error", error instanceof Error ? error.stack || error.message : String(error));
       return new Response(error instanceof Error ? error.stack || error.message : "Unknown error", {
         status: 500,
       });
@@ -319,6 +415,12 @@ function logUpdateDebug(...parts) {
 function logUpdateError(...parts) {
   appendUpdateTempLog(updateErrorLogPath, ...parts);
   logUpdateInstallError(...parts);
+}
+
+function logProtocolDebug(...parts) {
+  const line = `[${new Date().toISOString()}] ${parts.map((part) => String(part)).join(" ")}${os.EOL}`;
+  appendFileSync(protocolDebugLogPath, line, "utf8");
+  console.log("[protocol]", ...parts);
 }
 
 function spawnDetachedProcess(executable, args, options = {}) {
@@ -815,10 +917,6 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
-  if (server) {
-    server.close();
-  }
-
   if (process.platform !== "darwin") {
     app.quit();
   }

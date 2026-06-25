@@ -226,16 +226,20 @@
 - Added an exit-time snapshot flush in the root shell so the last opened project is written again on `beforeunload`/`pagehide`, reducing the chance that closing the app drops the most recent project state.
 - Added a no-op `customCheckAppRunning` NSIS override so the installer no longer injects the close/retry running-app prompt; release version bumped to `0.2.28`.
 - Current restore work now persists imported projects immediately to both IndexedDB and `localStorage`, logs restore/persist events for QA, and selects the freshest non-empty snapshot on startup so blank startup state cannot overwrite the last opened project; patch release is being prepared as `0.2.32`.
+- Packaged `camplan://app/` now receives SSR HTML through an internal `https://camplan.app/` request so the installed build gets the real `window.$_TSR` bootstrap instead of the previous empty shell fallback.
 - The NSIS close/retry prompt is being removed at the stock `installUtil.nsh` level, because the visible `Не удалось закрыть CamPlan` dialog came from the old-version uninstall loop rather than `customCheckAppRunning`.
 - Built `0.2.32` locally as `release\CamPlan-Installer-0.2.32.exe`; the release binary and generated NSIS debug output no longer contain the close/retry prompt text.
 - Restore investigation is now instrumented with temporary QA logs around every storage read/write, explicit `hasHydratedFromStorage` gating, and an empty-snapshot overwrite guard that only allows `new-project-confirmed` to write a blank project.
+- Added a temporary visible QA overlay to the root shell for installed-build verification of `current origin`, storage profile marker, live object/floor counts, last save/restore source, and IndexedDB/localStorage write status.
 - Added a local `build/allowOnlyOneInstallerInstance.nsh` override to remove the remaining NSIS close/retry app-running dialog path; release build `0.2.32` is ready as `release\CamPlan-Installer-0.2.32.exe`.
 - Startup restore now also blocks persistence until `isRestoring` is false and `hasLoadedInitialSnapshot` is true, so the empty default state cannot win the startup race.
 - Added a new device type `wifi_router` across the type model, toolbar, canvas rendering, properties panel, and import normalization so Wi-Fi routers can be created and restored like other devices.
 - Updated the `switch` toolbar icon to `EthernetPort` so it no longer visually matches `wifi_router`, and prepared release `0.2.33`.
 - Opening a JSON project through the Electron file dialog now remembers the source file path; if the project changes and the user closes the window, CamPlan asks whether to save changes back into that opened file before closing.
 - Prepared release `0.2.34` with the opened-project close save prompt and package-lock version alignment.
-- Fixed the packaged startup restore root cause by replacing the random localhost production origin with stable `camplan://app/`; release `0.2.35` is being prepared so installed builds reuse the same IndexedDB/localStorage origin on every launch.
+- Fixed the packaged startup restore root cause by replacing the random localhost production origin with stable `camplan://app/`; release `0.2.35` is built locally so installed builds reuse the same IndexedDB/localStorage origin on every launch.
+- Packaged UI loading is now verified separately from restore: the current QA target is to confirm the installed build opens a live React UI first, then resume import/save/restore checks only after that passes.
+- Fixed a shutdown-time main-process exception by removing the stale `server.close()` reference from the Electron `window-all-closed` handler, so closing the app no longer throws `ReferenceError: server is not defined`.
 # 25.05.2026 restore instrumentation
 
 - Added explicit restore/persist QA logging in the storage layer.
